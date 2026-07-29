@@ -1,109 +1,49 @@
-#!/bin/bash
-set -e
-
-echo "=== Unify V9 Codespace Auto Setup ==="
-
-# Backend setup - SQLite easiest for codespace
-# Robust path detection for /workspaces/Unify-v3 (codespace), /home/user/Unify-v3 (local), or current dir
-if [ -d "/home/user/Unify-v3/unify-backend" ]; then
-  cd /home/user/Unify-v3/unify-backend
-elif [ -d "unify-backend" ]; then
-  cd unify-backend
-elif [ -d "../unify-backend" ]; then
-  cd ../unify-backend
-else
-  ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-  cd "$ROOT/unify-backend"
-fi
-
-if [ ! -f .env ]; then
-  cp .env.example .env
-  echo ".env created from .env.example"
-fi
-
-# Force SQLite for Codespaces
-echo "Configuring SQLite for Codespace..."
-mkdir -p database
-touch database/database.sqlite
-# Update .env
-if grep -q "DB_CONNECTION=mysql" .env; then
-  sed -i 's/DB_CONNECTION=mysql/DB_CONNECTION=sqlite/' .env
-fi
-# Ensure APP_URL and CORS for codespace
-sed -i 's|APP_URL=.*|APP_URL=http://127.0.0.1:8000|' .env
-sed -i 's|FRONTEND_URL=.*|FRONTEND_URL=http://localhost:5173|' .env
-sed -i 's|API_URL=.*|API_URL=http://127.0.0.1:8000/api|' .env
-# Allow any github.dev domain for Sanctum
-sed -i 's|SANCTUM_STATEFUL_DOMAINS=.*|SANCTUM_STATEFUL_DOMAINS=localhost:5173,127.0.0.1:5173,*.app.github.dev|' .env
-
-echo "Installing composer deps..."
-composer install --no-interaction --prefer-dist
-
-echo "Generating key..."
-php artisan key:generate --force
-
-echo "Migrating and seeding (this creates test users)..."
-php artisan migrate --seed --force || php artisan migrate --force && php artisan db:seed --force
-
-echo "Linking storage..."
-php artisan storage:link || true
-php artisan config:clear
-php artisan cache:clear
-
-if [ -d "../frontend" ]; then
-  cd ../frontend
-elif [ -d "frontend" ]; then
-  cd frontend
-elif [ -d "/home/user/Unify-v3/frontend" ]; then
-  cd /home/user/Unify-v3/frontend
-else
-  ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-  cd "$ROOT/frontend"
-fi
-
-echo "Installing npm deps..."
-npm install
-
-# Fix API client for Codespace proxy
-echo "Creating frontend/.env.local with VITE_API_URL=/api (uses Vite proxy)"
-echo "VITE_API_URL=/api" > .env.local
-
-# Patch client.ts if it still has hardcoded 127.0.0.1 - make backup and replace
-if grep -q "127.0.0.1:8000/api" src/api/client.ts; then
-  echo "Patching src/api/client.ts to use /api proxy..."
-  cat > src/api/client.ts << 'EOF'
-import axios from 'axios';
-import { get } from 'idb-keyval';
-
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
-  withCredentials: true,
-  headers: {
-    'Accept': 'application/json',
-    'Content-Type': 'application/json',
-  }
-});
-
-api.interceptors.request.use(async (config) => {
-  const token = await get('auth_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  if (['post', 'put', 'patch', 'delete'].includes(config.method || '')) {
-    config.headers['Idempotency-Key'] = crypto.randomUUID();
-  }
-  return config;
-});
-
-export default api;
-EOF
-fi
-
-echo ""
-echo "=== Setup Done ==="
-echo "To run:"
-echo "Terminal 1: cd unify-backend && php artisan serve --host=0.0.0.0 --port=8000"
-echo "Terminal 2: cd frontend && npm run dev -- --host 0.0.0.0 --port=5173"
-echo ""
-echo "Test users: 990000001 / TempOwner!2026 (Owner), 100000001 / TempStudent!2026 (Student) etc."
-echo "Ports: Check PORTS tab - forward 8000 and 5173 as Public"
+{
+  "name": "Unify V9 - Fixed",
+  "image": "mcr.microsoft.com/devcontainers/base:jammy",
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "username": "codespace",
+      "userUid": "1000",
+      "userGid": "1000"
+    },
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20",
+      "installYarnUsingApt": false
+    },
+    "ghcr.io/devcontainers/features/php:1": {
+      "version": "8.2",
+      "installComposer": true
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "forwardPorts": [8000, 5173],
+  "portsAttributes": {
+    "8000": {
+      "label": "Backend API (Laravel 8000)",
+      "onAutoForward": "notify",
+      "visibility": "public"
+    },
+    "5173": {
+      "label": "Frontend (Vite 5173)",
+      "onAutoForward": "openBrowser",
+      "visibility": "public"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "bmewburn.vscode-intelephense-client",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "ms-vscode.vscode-json"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "remoteUser": "codespace"
+}
