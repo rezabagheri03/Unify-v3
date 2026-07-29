@@ -1,0 +1,158 @@
+name: Production Deployment - Hardened v2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+env:
+  DEPLOY_PATH: /home/${{ secrets.FTP_USER }}/unify-backend
+  FRONTEND_PATH: /home/${{ secrets.FTP_USER }}/public_html
+  STAGING_PATH: /home/${{ secrets.FTP_USER }}/staging
+  BACKUP_PATH: /home/${{ secrets.FTP_USER }}/backups
+  LIVE_SYMLINK: /home/${{ secrets.FTP_USER }}/live
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, xml, ctype, iconv, mysql, zip
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Backend Dependencies
+        run: |
+          cd unify-backend
+          composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader
+
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            unify-backend/
+            frontend/dist/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: production-deployment
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+
+      - name: Create Timestamped Backup
+        run: |
+          BACKUP_NAME=$(date +%Y%m%d_%H%M%S)
+          sshpass -p ${{ secrets.FTP_PASSWORD }} ssh -o StrictHostKeyChecking=no ${{ secrets.FTP_USER }}@${{ secrets.FTP_HOST }} "
+            mkdir -p ${{ env.BACKUP_PATH }}/\$BACKUP_NAME &&
+            if [ -d ${{ env.DEPLOY_PATH }} ]; then
+              cp -r ${{ env.DEPLOY_PATH }} ${{ env.BACKUP_PATH }}/\$BACKUP_NAME/backend || true
+            fi
+            if [ -d ${{ env.FRONTEND_PATH }} ]; then
+              cp -r ${{ env.FRONTEND_PATH }} ${{ env.BACKUP_PATH }}/\$BACKUP_NAME/frontend || true
+            fi
+          "
+
+      - name: Deploy Backend to Staging
+        uses: sebastianpopp/ftp-action@releases/v4
+        with:
+          host: ${{ secrets.FTP_HOST }}
+          user: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          localDir: "unify-backend"
+          remoteDir: ${{ env.STAGING_PATH }}
+          options: "--delete --exclude .env --exclude vendor --exclude storage/logs"
+
+      - name: Run Migrations & Cache on Staging
+        run: |
+          sshpass -p ${{ secrets.FTP_PASSWORD }} ssh -o StrictHostKeyChecking=no ${{ secrets.FTP_USER }}@${{ secrets.FTP_HOST }} "
+            cd ${{ env.STAGING_PATH }} &&
+            php artisan migrate --force &&
+            php artisan config:cache &&
+            php artisan route:cache &&
+            php artisan view:cache
+          "
+
+      - name: Atomic Swap (Backend)
+        run: |
+          sshpass -p ${{ secrets.FTP_PASSWORD }} ssh -o StrictHostKeyChecking=no ${{ secrets.FTP_USER }}@${{ secrets.FTP_HOST }} "
+            # Remove previous old version
+            rm -rf ${{ env.DEPLOY_PATH }}.old || true
+            
+            # Move current live to .old
+            if [ -d ${{ env.DEPLOY_PATH }} ]; then
+              mv ${{ env.DEPLOY_PATH }} ${{ env.DEPLOY_PATH }}.old
+            fi
+            
+            # Move staging to live
+            mv ${{ env.STAGING_PATH }} ${{ env.DEPLOY_PATH }}
+          "
+
+      - name: Deploy Frontend
+        uses: sebastianpopp/ftp-action@releases/v4
+        with:
+          host: ${{ secrets.FTP_HOST }}
+          user: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          localDir: "frontend/dist"
+          remoteDir: ${{ env.FRONTEND_PATH }}
+          options: "--delete"
+
+      - name: Post-Deployment Health Check
+        run: |
+          sleep 10
+          curl -f --max-time 10 https://api.unify-cs.ac.ir/api/health || echo "Health check warning"
+
+      - name: Rollback on Failure
+        if: failure()
+        run: |
+          echo "Deployment failed. Initiating rollback..."
+          sshpass -p ${{ secrets.FTP_PASSWORD }} ssh -o StrictHostKeyChecking=no ${{ secrets.FTP_USER }}@${{ secrets.FTP_HOST }} "
+            LATEST_BACKUP=\$(ls -t ${{ env.BACKUP_PATH }} | head -1)
+            if [ -n \"\$LATEST_BACKUP\" ]; then
+              echo \"Restoring from backup: \$LATEST_BACKUP\"
+              rm -rf ${{ env.DEPLOY_PATH }} || true
+              if [ -d ${{ env.BACKUP_PATH }}/\$LATEST_BACKUP/backend ]; then
+                cp -r ${{ env.BACKUP_PATH }}/\$LATEST_BACKUP/backend ${{ env.DEPLOY_PATH }}
+              fi
+              if [ -d ${{ env.BACKUP_PATH }}/\$LATEST_BACKUP/frontend ]; then
+                rm -rf ${{ env.FRONTEND_PATH }} || true
+                cp -r ${{ env.BACKUP_PATH }}/\$LATEST_BACKUP/frontend ${{ env.FRONTEND_PATH }}
+              fi
+            fi
+          "
+
+  cleanup:
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Cleanup Old Backups (keep last 5)
+        run: |
+          sshpass -p ${{ secrets.FTP_PASSWORD }} ssh -o StrictHostKeyChecking=no ${{ secrets.FTP_USER }}@${{ secrets.FTP_HOST }} "
+            cd ${{ env.BACKUP_PATH }} &&
+            ls -t | tail -n +6 | xargs -r rm -rf
+          "

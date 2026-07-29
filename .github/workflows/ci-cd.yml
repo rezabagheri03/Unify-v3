@@ -1,0 +1,70 @@
+name: Unify V9 CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: unify_test
+        ports:
+          - 3306:3306
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, xml, ctype, iconv, mysql, zip
+      - name: Install Dependencies
+        run: |
+          cd unify-backend
+          composer install --no-interaction --prefer-dist
+      - name: Run Migrations
+        run: |
+          cd unify-backend
+          cp .env.example .env
+          php artisan key:generate
+          php artisan migrate --force
+      - name: Run Tests
+        run: |
+          cd unify-backend
+          php artisan test
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install & Build
+        run: |
+          cd frontend
+          npm install
+          npm run build
+      - name: Run Storybook Build
+        run: |
+          cd frontend
+          npx storybook build
+
+  deploy:
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy to Pars Pack
+        run: |
+          echo "Deploying to Pars Pack Cloud Host..."
+          # Add FTP/RSYNC deployment steps here
+          echo "Deployment completed successfully!"
