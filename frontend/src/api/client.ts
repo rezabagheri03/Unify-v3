@@ -2,7 +2,7 @@ import axios from 'axios';
 import { get } from 'idb-keyval';
 
 const api = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   withCredentials: true,
   headers: {
     'Accept': 'application/json',
