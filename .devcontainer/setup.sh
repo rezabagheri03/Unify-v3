@@ -4,7 +4,17 @@ set -e
 echo "=== Unify V9 Codespace Auto Setup ==="
 
 # Backend setup - SQLite easiest for codespace
-cd /home/user/Unify-v3/unify-backend || cd unify-backend
+# Robust path detection for /workspaces/Unify-v3 (codespace), /home/user/Unify-v3 (local), or current dir
+if [ -d "/home/user/Unify-v3/unify-backend" ]; then
+  cd /home/user/Unify-v3/unify-backend
+elif [ -d "unify-backend" ]; then
+  cd unify-backend
+elif [ -d "../unify-backend" ]; then
+  cd ../unify-backend
+else
+  ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+  cd "$ROOT/unify-backend"
+fi
 
 if [ ! -f .env ]; then
   cp .env.example .env
@@ -40,7 +50,16 @@ php artisan storage:link || true
 php artisan config:clear
 php artisan cache:clear
 
-cd ../frontend || cd /home/user/Unify-v3/frontend
+if [ -d "../frontend" ]; then
+  cd ../frontend
+elif [ -d "frontend" ]; then
+  cd frontend
+elif [ -d "/home/user/Unify-v3/frontend" ]; then
+  cd /home/user/Unify-v3/frontend
+else
+  ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+  cd "$ROOT/frontend"
+fi
 
 echo "Installing npm deps..."
 npm install
