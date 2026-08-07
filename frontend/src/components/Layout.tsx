@@ -15,6 +15,7 @@ import Chip from '@mui/material/Chip';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useAuthStore } from '../stores/authStore';
 import { useNotificationsPolling } from '../api/polling';
+import { useServerStatus } from '../api/serverStatus';
 import ServerBanner from './ServerBanner';
 
 interface NavItem {
@@ -79,19 +80,8 @@ const NAV: Record<string, NavItem[]> = {
 export default function Layout() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
   const unread = useNotificationsPolling();
-
-  useEffect(() => {
-    const on = () => setIsOnline(true);
-    const off = () => setIsOnline(false);
-    window.addEventListener('online', on);
-    window.addEventListener('offline', off);
-    return () => {
-      window.removeEventListener('online', on);
-      window.removeEventListener('offline', off);
-    };
-  }, []);
+  const serverStatus = useServerStatus();
 
   const role = (user?.role as keyof typeof NAV) || 'student';
   const items = NAV[role] || NAV.student;
@@ -110,8 +100,8 @@ export default function Layout() {
           </Typography>
           <Chip
             size="small"
-            color={isOnline ? 'success' : 'error'}
-            label={isOnline ? 'آنلاین' : 'آفلاین'}
+            color={serverStatus === 'online' ? 'success' : serverStatus === 'checking' ? 'default' : 'error'}
+            label={serverStatus === 'online' ? 'سرویس: آنلاین' : serverStatus === 'checking' ? 'در حال بررسی...' : 'سرویس: قطع'}
             sx={{ ml: 1 }}
           />
           <IconButton color="inherit" onClick={handleLogout} aria-label="خروج">
