@@ -8,6 +8,7 @@ use App\Models\ResourceStickyNote;
 use App\Models\TicketReply;
 use App\Models\AssignmentTracker;
 use App\Models\CurriculumChart;
+use App\Models\StudentPassedCourse;
 use App\Models\IdempotencyKeys;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
@@ -112,10 +113,38 @@ class OfflineSyncController extends Controller
 
     private function processCurriculumCheckbox(array $payload, string $userId)
     {
-        // Placeholder for OR merge logic
-        $chart = CurriculumChart::find($payload['chart_id'] ?? null);
-        if ($chart) {
-            // Add proper merge logic here
+        // OR-merge (F19): once a course is marked passed it stays passed unless
+        // the student explicitly un-checks it with a confirmation flag.
+        if (empty($payload['course_id'])) {
+            throw new \InvalidArgumentException('course_id is required');
+        }
+
+        $entryYear = $payload['entry_year'] ?? 1401;
+
+        $existing = StudentPassedCourse::where('student_id', $userId)
+            ->where('course_id', $payload['course_id'])
+            ->where('entry_year', $entryYear)
+            ->first();
+
+        if (! empty($payload['passed'])) {
+            if ($existing) {
+                $existing->update(['passed' => true]);
+            } else {
+                StudentPassedCourse::create([
+                    'id' => (string) Str::uuid(),
+                    'student_id' => $userId,
+                    'course_id' => $payload['course_id'],
+                    'entry_year' => $entryYear,
+                    'passed' => true,
+                    'grade' => null,
+                    'created_at' => now(),
+                ]);
+            }
+        } elseif ($existing && empty($payload['explicit_uncheck'])) {
+            // OR merge: keep passed=true unless explicitly un-checked
+            $existing->update(['passed' => true]);
+        } elseif ($existing && ! empty($payload['explicit_uncheck'])) {
+            $existing->update(['passed' => false]);
         }
     }
 }

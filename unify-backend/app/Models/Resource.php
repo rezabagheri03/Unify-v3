@@ -14,7 +14,7 @@ class Resource extends Model
 
     protected $fillable = [
         'id', 'course_id', 'professor_id', 'specification_id', 'uploader_id',
-        'title', 'description', 'file_path', 'file_size_bytes', 'file_mime',
+        'title', 'description', 'file_path', 'temp_path', 'file_size_bytes', 'file_mime',
         'shamsi_original', 'created_at_g', 'status', 'version',
         'previous_version_id', 'family_id', 'scheduled_hard_delete_at',
         'average_rating', 'rating_count', 'download_count',

@@ -29,6 +29,9 @@ class Kernel extends ConsoleKernel
 
         // Storage stats
         $schedule->command('storage:calculate-stats')->dailyAt('01:00');
+
+        // F12: mark late assignments hourly
+        $schedule->command('assignments:mark-late')->hourly();
     }
 
     protected function commands(): void

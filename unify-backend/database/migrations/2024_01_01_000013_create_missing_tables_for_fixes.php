@@ -54,12 +54,15 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // FIX M10: notifications type as ENUM (raw for safety)
-        DB::statement("ALTER TABLE notifications MODIFY COLUMN type ENUM(
-            'spec_changed','resource_new','ticket_answered','ticket_escalated',
-            'registration_open_warning','registration_close_warning','exam_period_start',
-            'assignment_reminder','assignment_graded','notice_high','general'
-        ) NOT NULL");
+        // FIX M10: notifications type as ENUM (raw for safety) - MySQL only,
+        // SQLite uses the plain string column from 000011 (local verification/tests).
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE notifications MODIFY COLUMN type ENUM(
+                'spec_changed','resource_new','ticket_answered','ticket_escalated',
+                'registration_open_warning','registration_close_warning','exam_period_start',
+                'assignment_reminder','assignment_graded','notice_high','general'
+            ) NOT NULL");
+        }
     }
 
     public function down(): void

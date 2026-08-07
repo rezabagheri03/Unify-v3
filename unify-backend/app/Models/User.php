@@ -52,6 +52,21 @@ class User extends Authenticatable
         return $this->hasMany(Enrollment::class, 'student_id');
     }
 
+    public function passwordHistories()
+    {
+        return $this->hasMany(PasswordHistory::class, 'user_id');
+    }
+
+    public function deviceTokens()
+    {
+        return $this->hasMany(DeviceToken::class, 'user_id');
+    }
+
+    public function honorFlags()
+    {
+        return $this->hasMany(HonorFlag::class, 'student_id');
+    }
+
     public function resources()
     {
         return $this->hasMany(Resource::class, 'uploader_id');

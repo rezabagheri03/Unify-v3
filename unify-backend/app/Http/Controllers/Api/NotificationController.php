@@ -15,6 +15,7 @@ class NotificationController extends Controller
         $user = $request->user();
         $since = $request->get('since', now()->subMinutes(5));
 
+        // FIX C5: 5s file cache per user to reduce MySQL load
         $cacheKey = "notifications:{$user->id}:{$since}";
 
         return Cache::remember($cacheKey, 5, function () use ($user, $since) {
@@ -25,6 +26,15 @@ class NotificationController extends Controller
                 ->limit(50)
                 ->get();
         });
+    }
+
+    public function markRead(Request $request, $id)
+    {
+        Notification::where('id', $id)
+            ->where('user_id', $request->user()->id)
+            ->update(['read' => true]);
+
+        return response()->json(['success' => true]);
     }
 
     public function mute(Request $request)
@@ -42,12 +52,6 @@ class NotificationController extends Controller
             ['muted' => $request->muted]
         );
 
-        return response()->json(['success' => true]);
-    }
-
-    public function markRead(Request $request, $id)
-    {
-        Notification::where('id', $id)->where('user_id', $request->user()->id)->update(['read' => true]);
         return response()->json(['success' => true]);
     }
 }

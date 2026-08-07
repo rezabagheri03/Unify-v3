@@ -17,8 +17,11 @@ class SpecificationController extends Controller
 
         if ($request->has('search')) {
             $search = $request->search;
-            $query->whereHas('course', fn($q) => $q->where('name', 'like', "%$search%"))
-                  ->orWhereHas('course', fn($q) => $q->where('code', 'like', "%$search%"));
+            // Group the orWhereHas inside a closure so the OR doesn't leak scope.
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('course', fn($c) => $c->where('name', 'like', "%{$search}%"))
+                  ->orWhereHas('course', fn($c) => $c->where('code', 'like', "%{$search}%"));
+            });
         }
 
         if ($request->has('day')) {
@@ -27,10 +30,13 @@ class SpecificationController extends Controller
 
         $specs = $query->paginate(20);
 
-        // Use ShamsiService for consistent date formatting
-        $data = $specs->items()->map(function ($spec) {
+        // items() returns an array; collect() so we can map.
+        $data = collect($specs->items())->map(function ($spec) {
             if ($spec->exam_date_final_g) {
                 $spec->shamsi_final = ShamsiService::toShamsi($spec->exam_date_final_g);
+            }
+            if ($spec->exam_date_midterm_g) {
+                $spec->shamsi_midterm = ShamsiService::toShamsi($spec->exam_date_midterm_g);
             }
             return $spec;
         });

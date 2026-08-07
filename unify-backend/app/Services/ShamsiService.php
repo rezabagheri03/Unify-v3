@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Carbon\Carbon;
 use Morilog\Jalali\Jalalian;
 
 class ShamsiService
@@ -15,10 +16,17 @@ class ShamsiService
         }
     }
 
-    public static function toShamsi(string $gregorianDate): string
+    /**
+     * @param  \Carbon\Carbon|\DateTime|string|null  $gregorianDate
+     */
+    public static function toShamsi(mixed $gregorianDate): string
     {
+        if (empty($gregorianDate)) {
+            return '';
+        }
         try {
-            return Jalalian::fromCarbon(new \DateTime($gregorianDate))->format('Y/m/d');
+            $carbon = $gregorianDate instanceof Carbon ? $gregorianDate : Carbon::parse($gregorianDate);
+            return Jalalian::fromCarbon($carbon)->format('Y/m/d');
         } catch (\Exception $e) {
             return '1403/01/01';
         }

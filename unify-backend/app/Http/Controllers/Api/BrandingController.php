@@ -3,25 +3,37 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\SystemConfig;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class BrandingController extends Controller
 {
+    /** Public branding config (login page / PWA theme). */
+    public function publicConfig(Request $request)
+    {
+        return response()->json([
+            'brand_name' => SystemConfig::get('brand_name', 'Unify'),
+            'logo_path' => SystemConfig::get('logo_path', '/uploads/branding/logo.png'),
+        ]);
+    }
+
     public function uploadLogo(Request $request)
     {
         $request->validate([
-            'logo' => 'required|image|max:2048',
+            'logo' => 'required|image|mimes:png,svg|max:2048',
         ]);
 
         $path = $request->file('logo')->store('branding', 'public');
+        SystemConfig::set('logo_path', '/uploads/branding/' . basename($path));
 
-        // Save to system config
-        \App\Models\SystemConfig::updateOrCreate(
-            ['key' => 'logo_path'],
-            ['value' => $path]
-        );
+        return response()->json(['path' => '/uploads/branding/' . basename($path)]);
+    }
 
-        return response()->json(['path' => $path]);
+    public function setBrandName(Request $request)
+    {
+        $request->validate(['brand_name' => 'required|string|max:50']);
+        SystemConfig::set('brand_name', $request->brand_name);
+        return response()->json(['brand_name' => $request->brand_name]);
     }
 }

@@ -15,7 +15,6 @@ class UserController extends Controller
 {
     public function bulkImport(Request $request)
     {
-        // This calls the Excel ImportController logic
         return app(\App\Http\Controllers\Api\Excel\ImportController::class)->importUsers($request);
     }
 
@@ -25,10 +24,13 @@ class UserController extends Controller
 
         $zip = new ZipArchive();
         $zipFileName = storage_path('app/temp/envelopes_' . time() . '.zip');
+        if (! is_dir(storage_path('app/temp'))) {
+            mkdir(storage_path('app/temp'), 0775, true);
+        }
         $zip->open($zipFileName, ZipArchive::CREATE | ZipArchive::OVERWRITE);
 
         foreach ($users as $user) {
-            $tempPassword = Str::random(12);
+            $tempPassword = $this->generateTempPassword();
             $user->update([
                 'password_hash' => Hash::make($tempPassword),
                 'must_change_password' => true,
@@ -36,19 +38,91 @@ class UserController extends Controller
             ]);
 
             $qr = QrCode::size(180)->generate($user->id . '|' . $tempPassword);
-
             $pdf = Pdf::loadView('envelopes.it-handout', [
                 'user' => $user,
                 'tempPassword' => $tempPassword,
                 'qr' => $qr,
             ]);
-
-            $pdfContent = $pdf->output();
-            $zip->addFromString("envelope-{$user->id}.pdf", $pdfContent);
+            $zip->addFromString("envelope-{$user->id}.pdf", $pdf->output());
         }
 
         $zip->close();
-
         return response()->download($zipFileName)->deleteFileAfterSend(true);
+    }
+
+    public function resetPassword(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+        $tempPassword = $this->generateTempPassword();
+
+        $user->update([
+            'password_hash' => Hash::make($tempPassword),
+            'must_change_password' => true,
+            'temporary_password_expires_at' => now()->addDays(7),
+        ]);
+
+        $qr = QrCode::size(180)->generate($user->id . '|' . $tempPassword);
+        $pdf = Pdf::loadView('envelopes.it-handout', [
+            'user' => $user,
+            'tempPassword' => $tempPassword,
+            'qr' => $qr,
+        ]);
+
+        return response($pdf->output(), 200)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'inline; filename="envelope-' . $user->id . '.pdf"');
+    }
+
+    public function ban(Request $request, $id)
+    {
+        $request->validate(['reason' => 'nullable|string|max:500']);
+        $user = User::findOrFail($id);
+
+        if ($user->role === 'owner') {
+            return response()->json(['message' => 'نمی‌توان مالک سیستم را بن کرد', 'code' => 'FORBIDDEN'], 403);
+        }
+
+        $user->update([
+            'is_banned' => true,
+            'banned_reason' => $request->reason ?? 'نقض قوانین',
+            'banned_at' => now(),
+            'banned_by' => $request->user()->id,
+        ]);
+
+        return response()->json(['message' => 'کاربر بن شد', 'user' => $user->only(['id', 'is_banned', 'banned_reason'])]);
+    }
+
+    public function unban(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+        $user->update([
+            'is_banned' => false,
+            'banned_reason' => null,
+            'banned_at' => null,
+            'banned_by' => null,
+        ]);
+        return response()->json(['message' => 'رفع بن انجام شد']);
+    }
+
+    /** 12-char temp password with upper, lower, digit, special (F01). */
+    private function generateTempPassword(): string
+    {
+        $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+        $lower = 'abcdefghijkmnpqrstuvwxyz';
+        $digits = '23456789';
+        $special = '!@#$%^&*';
+        $pool = [$upper, $lower, $digits, $special];
+
+        // Guarantee at least one of each class, then fill and shuffle.
+        $parts = [];
+        foreach ($pool as $set) {
+            $parts[] = $set[random_int(0, strlen($set) - 1)];
+        }
+        while (count($parts) < 12) {
+            $set = $pool[array_rand($pool)];
+            $parts[] = $set[random_int(0, strlen($set) - 1)];
+        }
+        shuffle($parts);
+        return implode('', $parts);
     }
 }
