@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
@@ -12,9 +12,12 @@ import ServerBanner from '../../components/ServerBanner';
 
 export default function Onboarding() {
   const navigate = useNavigate();
+  const location = useLocation() as any;
   const { user, updateUser, setMustChangePassword } = useAuthStore();
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  // Prefill from a previous interrupted attempt (names survive a re-login).
+  const prevState = (location.state as any) || {};
+  const [firstName, setFirstName] = useState(prevState.firstName || '');
+  const [lastName, setLastName] = useState(prevState.lastName || '');
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newPasswordConf, setNewPasswordConf] = useState('');
@@ -44,8 +47,7 @@ export default function Onboarding() {
     }
 
     try {
-      // Step 1 (CRITICAL): change the temp password — this activates the
-      // account. Done FIRST so a later hiccup can never lose it.
+      // Step 1 (CRITICAL): change the temp password — this activates the account.
       await api.post('/password/change', {
         old_password: oldPassword,
         new_password: newPassword,
@@ -64,6 +66,20 @@ export default function Onboarding() {
       setMustChangePassword(false);
       navigate(homePathFor(user?.role));
     } catch (err: any) {
+      // Session lost (token wiped by a reload/iframe remount in the sandboxed
+      // preview). The password change did NOT happen, so the temp password is
+      // still valid — send the user back to login prefilled to retry.
+      if (err?.response?.status === 401) {
+        navigate('/login', {
+          state: {
+            username: user?.id || '',
+            firstName,
+            lastName,
+            notice: 'نشست شما منقضی شد (صفحه تازه‌سازی شد). دوباره با رمز موقت وارد شوید — رمز هنوز تغییر نکرده است.',
+          },
+        });
+        return;
+      }
       const msg = apiErrorMessage(err);
       // Explain the most common failure so the user isn't left guessing.
       if (err?.response?.status === 422) {
