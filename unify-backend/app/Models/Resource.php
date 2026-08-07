@@ -32,5 +32,35 @@ class Resource extends Model
         'scheduled_hard_delete_at' => 'datetime',
     ];
 
+    public function course()
+    {
+        return $this->belongsTo(Course::class, 'course_id');
+    }
+
+    public function professor()
+    {
+        return $this->belongsTo(User::class, 'professor_id');
+    }
+
+    public function uploader()
+    {
+        return $this->belongsTo(User::class, 'uploader_id');
+    }
+
+    public function specification()
+    {
+        return $this->belongsTo(CourseSpecification::class, 'specification_id');
+    }
+
+    public function ratings()
+    {
+        return $this->hasMany(ResourceRating::class, 'resource_family_id', 'family_id');
+    }
+
+    public function stickyNotes()
+    {
+        return $this->hasMany(ResourceStickyNote::class, 'resource_family_id', 'family_id');
+    }
+
     // FIX C1: Observer will set family_id = id after creation for first version
 }

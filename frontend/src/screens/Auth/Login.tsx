@@ -8,6 +8,7 @@ import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
 import api, { apiErrorMessage } from '../../api/client';
 import { useAuthStore } from '../../stores/authStore';
+import { homePathFor } from '../../utils/navigation';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -25,7 +26,7 @@ export default function Login() {
       const res = await api.post('/auth/login', { username, password });
       const { user, access_token } = res.data;
       login(user, access_token);
-      navigate(user?.must_change_password ? '/onboarding' : '/dashboard');
+      navigate(user?.must_change_password ? '/onboarding' : homePathFor(user?.role));
     } catch (err: any) {
       setError(apiErrorMessage(err, 'نام کاربری یا رمز اشتباه است'));
     } finally {

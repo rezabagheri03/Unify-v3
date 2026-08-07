@@ -31,4 +31,9 @@ class Enrollment extends Model
     {
         return $this->belongsTo(CourseSpecification::class, 'specification_id');
     }
+
+    public function semester()
+    {
+        return $this->belongsTo(Semester::class, 'semester_id');
+    }
 }

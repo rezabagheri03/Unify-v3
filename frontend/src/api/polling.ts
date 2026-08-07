@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import api from './client';
+import { lsGet, lsSet } from '../db/safeStorage';
 import { useAuthStore } from '../stores/authStore';
 
 /**
@@ -9,7 +10,7 @@ import { useAuthStore } from '../stores/authStore';
 export function useNotificationsPolling() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const { user } = useAuthStore();
-  const sinceRef = useRef<string>(localStorage.getItem('last_poll') || new Date(Date.now() - 5 * 60 * 1000).toISOString());
+  const sinceRef = useRef<string>(lsGet('last_poll') || new Date(Date.now() - 5 * 60 * 1000).toISOString());
 
   useEffect(() => {
     if (!user) return;
@@ -27,7 +28,7 @@ export function useNotificationsPolling() {
             return [...fresh, ...prev].slice(0, 50);
           });
           sinceRef.current = new Date().toISOString();
-          localStorage.setItem('last_poll', sinceRef.current);
+          lsSet('last_poll', sinceRef.current);
         }
       } catch (e) {
         // silent: polling must never break the UI

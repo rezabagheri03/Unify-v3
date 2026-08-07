@@ -7,6 +7,7 @@ import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
 import api, { apiErrorMessage } from '../../api/client';
 import { useAuthStore } from '../../stores/authStore';
+import { homePathFor } from '../../utils/navigation';
 
 export default function Onboarding() {
   const navigate = useNavigate();
@@ -32,7 +33,7 @@ export default function Onboarding() {
       });
       updateUser({ first_name: firstName, last_name: lastName });
       setMustChangePassword(false);
-      navigate('/dashboard');
+      navigate(homePathFor(user?.role));
     } catch (err: any) {
       setError(apiErrorMessage(err));
     } finally {

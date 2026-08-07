@@ -18,24 +18,42 @@ class UserController extends Controller
         return app(\App\Http\Controllers\Api\Excel\ImportController::class)->importUsers($request);
     }
 
+    /**
+     * Generate a ZIP of IT-handout envelopes for all students with an unused
+     * temp password (F01).
+     *
+     * Bulk-safe design:
+     *  - Students only (never owner/admin/staff).
+     *  - All 600 PDFs are generated FIRST; passwords are only committed AFTER
+     *    every PDF succeeds (atomic — a mid-run failure can't corrupt logins).
+     *  - set_time_limit is raised because 600 argon2id hashes + 600 PDFs
+     *    exceed the default 30s; bulk temp hashes use a reduced argon2id cost.
+     */
     public function generateEnvelopeZip(Request $request)
     {
-        $users = User::where('must_change_password', true)->take(600)->get();
+        set_time_limit(600);
+
+        $users = User::where('role', 'student')
+            ->where('must_change_password', true)
+            ->take(600)
+            ->get();
+
+        if ($users->isEmpty()) {
+            return response()->json(['message' => 'دانشجویی با رمز موقت در انتظار یافت نشد', 'code' => 'NO_ENVELOPES'], 404);
+        }
 
         $zip = new ZipArchive();
         $zipFileName = storage_path('app/temp/envelopes_' . time() . '.zip');
-        if (! is_dir(storage_path('app/temp'))) {
-            mkdir(storage_path('app/temp'), 0775, true);
+        if (! is_dir(dirname($zipFileName))) {
+            mkdir(dirname($zipFileName), 0775, true);
         }
         $zip->open($zipFileName, ZipArchive::CREATE | ZipArchive::OVERWRITE);
 
+        $pending = []; // password changes applied only after all PDFs succeed
         foreach ($users as $user) {
             $tempPassword = $this->generateTempPassword();
-            $user->update([
-                'password_hash' => Hash::make($tempPassword),
-                'must_change_password' => true,
-                'temporary_password_expires_at' => now()->addDays(7),
-            ]);
+            $hash = Hash::make($tempPassword, ['memory_cost' => 65536, 'time_cost' => 1, 'threads' => 1]);
+            $pending[] = ['user' => $user, 'hash' => $hash];
 
             $qr = QrCode::size(180)->generate($user->id . '|' . $tempPassword);
             $pdf = Pdf::loadView('envelopes.it-handout', [
@@ -47,6 +65,18 @@ class UserController extends Controller
         }
 
         $zip->close();
+
+        // All PDFs built OK — now (and only now) commit the new temp passwords.
+        \Illuminate\Support\Facades\DB::transaction(function () use ($pending) {
+            foreach ($pending as $p) {
+                $p['user']->update([
+                    'password_hash' => $p['hash'],
+                    'must_change_password' => true,
+                    'temporary_password_expires_at' => now()->addDays(7),
+                ]);
+            }
+        });
+
         return response()->download($zipFileName)->deleteFileAfterSend(true);
     }
 

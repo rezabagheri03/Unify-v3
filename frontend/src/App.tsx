@@ -6,6 +6,7 @@ import { useAuthStore } from './stores/authStore';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import Layout from './components/Layout';
+import { homePathFor } from './utils/navigation';
 
 // Auth
 import Login from './screens/Auth/Login';
@@ -79,6 +80,12 @@ function RoleGuard({ roles }: { roles: string[] }) {
     return <Navigate to="/login" replace />;
   }
   return <Outlet />;
+}
+
+/** Role-aware root redirect. */
+function HomeRedirect() {
+  const { user } = useAuthStore();
+  return <Navigate to={homePathFor(user?.role)} replace />;
 }
 
 function App() {
@@ -161,7 +168,7 @@ function App() {
               </Route>
             </Route>
 
-            <Route path="/" element={<Navigate to="/dashboard" />} />
+            <Route path="/" element={<HomeRedirect />} />
             <Route path="*" element={<div>صفحه یافت نشد - Unify V9</div>} />
           </Routes>
         </BrowserRouter>
