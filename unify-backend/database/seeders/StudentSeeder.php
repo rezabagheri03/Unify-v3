@@ -53,7 +53,7 @@ class StudentSeeder extends Seeder
 
     private function createStudent(string $id, string $firstName, string $lastName, string $status, string $tempHash): void
     {
-        User::updateOrCreate(
+        User::firstOrCreate(
             ['id' => $id],
             [
                 'password_hash' => $tempHash,

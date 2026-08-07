@@ -12,7 +12,7 @@ class OwnerSeeder extends Seeder
     public function run(): void
     {
         // Create Owner user (IT handout style - temp password)
-        $owner = User::updateOrCreate(
+        $owner = User::firstOrCreate(
             ['id' => '990000001'],
             [
                 'password_hash' => Hash::make('TempOwner!2026', ['rounds' => 12]),

@@ -8,6 +8,7 @@ import Alert from '@mui/material/Alert';
 import api, { apiErrorMessage } from '../../api/client';
 import { useAuthStore } from '../../stores/authStore';
 import { homePathFor } from '../../utils/navigation';
+import ServerBanner from '../../components/ServerBanner';
 
 export default function Onboarding() {
   const navigate = useNavigate();
@@ -24,18 +25,55 @@ export default function Onboarding() {
     e.preventDefault();
     setLoading(true);
     setError('');
+
+    // Client-side password sanity before hitting the API
+    if (newPassword.length < 8) {
+      setError('رمز جدید باید حداقل ۸ کاراکتر باشد');
+      setLoading(false);
+      return;
+    }
+    if (newPassword !== newPasswordConf) {
+      setError('تکرار رمز جدید با رمز جدید یکسان نیست');
+      setLoading(false);
+      return;
+    }
+    if (newPassword === oldPassword) {
+      setError('رمز جدید نباید با رمز فعلی یکسان باشد');
+      setLoading(false);
+      return;
+    }
+
     try {
+      // Step 1: save name (informational; failing here shouldn't block password change)
       await api.post('/onboarding', { first_name: firstName, last_name: lastName });
+
+      // Step 2: change the temp password — this is what activates the account.
       await api.post('/password/change', {
         old_password: oldPassword,
         new_password: newPassword,
         new_password_confirmation: newPasswordConf,
       });
+
       updateUser({ first_name: firstName, last_name: lastName });
       setMustChangePassword(false);
       navigate(homePathFor(user?.role));
     } catch (err: any) {
-      setError(apiErrorMessage(err));
+      const msg = apiErrorMessage(err);
+      // Explain the most common failure so the user isn't left guessing.
+      if (err?.response?.status === 422) {
+        const field = err?.response?.data?.errors;
+        if (field?.new_password) {
+          setError('رمز جدید نامعتبر است: ' + (field.new_password[0] || ''));
+        } else if (field?.old_password) {
+          setError('رمز موقت فعلی را درست وارد کنید');
+        } else {
+          setError(msg);
+        }
+      } else if (err?.response?.status === 400) {
+        setError('تغییر رمز ناموفق: ' + msg + ' — رمز موقت قبلی هنوز معتبر است.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -43,6 +81,7 @@ export default function Onboarding() {
 
   return (
     <Box sx={{ maxWidth: 460, mx: 'auto', mt: 10, p: 3 }}>
+      <ServerBanner />
       <Typography variant="h5" align="center" gutterBottom>
         تکمیل اطلاعات اولیه
       </Typography>
@@ -57,7 +96,7 @@ export default function Onboarding() {
         <TextField fullWidth label="رمز جدید (حداقل ۸ کاراکتر، شامل عدد و نماد)" type="password" sx={{ mb: 2 }} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
         <TextField fullWidth label="تکرار رمز جدید" type="password" sx={{ mb: 3 }} value={newPasswordConf} onChange={(e) => setNewPasswordConf(e.target.value)} required />
         <Button type="submit" fullWidth variant="contained" size="large" disabled={loading}>
-          ذخیره و ورود
+          {loading ? 'در حال ثبت...' : 'ذخیره و ورود'}
         </Button>
       </form>
     </Box>

@@ -51,7 +51,7 @@ export const useAuthStore = create<AuthState>()(
       // Safe storage: IndexedDB when available, in-memory otherwise (works in
       // sandboxed preview iframes and private browsing).
       storage: createJSONStorage(() => ({
-        getItem: async (name) => (await storageGet<string>(name)) ?? null,
+        getItem: async (name) => (await storageGet(name)) ?? null,
         setItem: async (name, value) => storageSet(name, value),
         removeItem: async (name) => storageDel(name),
       })),

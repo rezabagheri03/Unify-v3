@@ -47,7 +47,7 @@ function uuidv4(): string {
 
 api.interceptors.request.use(async (config) => {
   // In-memory token first (never misses during a session), then storage.
-  const token = getAuthTokenSync() ?? (await storageGet<string>('auth_token'));
+  const token = getAuthTokenSync() ?? (await storageGet('auth_token'));
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -76,6 +76,10 @@ api.interceptors.response.use(
 
 /** Extract the documented Persian error shape: { message, errors, code, retry_after } */
 export function apiErrorMessage(err: any, fallback = 'خطای ناشناخته'): string {
+  // axios network-level failure (server down / no connection)
+  if (err && !err.response && err.request) {
+    return 'اتصال به سرور برقرار نیست. لطفاً چند لحظه بعد دوباره تلاش کنید.';
+  }
   return err?.response?.data?.message || err?.message || fallback;
 }
 

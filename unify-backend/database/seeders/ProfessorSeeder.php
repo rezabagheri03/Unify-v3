@@ -17,7 +17,7 @@ class ProfessorSeeder extends Seeder
     {
         $count = 0;
         foreach (self::PROFESSOR_IDS as $i => $id) {
-            User::updateOrCreate(
+            User::firstOrCreate(
                 ['id' => $id],
                 [
                     'password_hash' => Hash::make('TempProf!2026', ['rounds' => 12]),
@@ -33,7 +33,7 @@ class ProfessorSeeder extends Seeder
         }
 
         // Keep the legacy professor account referenced by older tests/docs.
-        User::updateOrCreate(
+        User::firstOrCreate(
             ['id' => '200000001'],
             [
                 'password_hash' => Hash::make('TempProf!2026', ['rounds' => 12]),

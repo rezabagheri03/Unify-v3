@@ -9,6 +9,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import api, { apiErrorMessage } from '../../api/client';
 import { useAuthStore } from '../../stores/authStore';
 import { homePathFor } from '../../utils/navigation';
+import ServerBanner from '../../components/ServerBanner';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -36,6 +37,7 @@ export default function Login() {
 
   return (
     <Box sx={{ maxWidth: 420, mx: 'auto', mt: 12, p: 3 }}>
+      <ServerBanner />
       <Typography variant="h4" align="center" gutterBottom>
         یونیفای
       </Typography>

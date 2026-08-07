@@ -2,18 +2,73 @@ import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
 
 /**
  * Safe storage that works everywhere — including sandboxed iframes with an
- * opaque origin (e.g. the in-app preview, `sandbox="allow-scripts"` without
- * `allow-same-origin`) and private-browsing contexts where IndexedDB and
- * localStorage throw SecurityError.
+ * opaque origin (e.g. the in-app preview) and private-browsing contexts where
+ * IndexedDB / localStorage throw SecurityError.
  *
- * Strategy: try real IndexedDB first; on the first failure, permanently fall
- * back to an in-memory Map. In-memory means state lives for the session only
- * (reload loses it) — acceptable for previews, and normal browsers still get
- * full persistence.
+ * Semantics are RAW STRING (like localStorage): values are stored as-is and
+ * returned as-is. Callers that need objects JSON-encode/decode themselves
+ * (see db/idb.ts).
+ *
+ * Tiers (each falls back on failure):
+ *   1. IndexedDB (full persistence in normal browsers)
+ *   2. localStorage (survives reloads in same-origin contexts / webviews)
+ *   3. in-memory Map (session-only, works literally everywhere)
  */
 
 const memory = new Map<string, unknown>();
 let idbBroken = false;
+let lsBroken = false;
+const lsMemory = new Map<string, string>();
+
+function lsTry(): boolean {
+  if (lsBroken) return false;
+  try {
+    if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return false;
+    const k = '__unify_probe__';
+    window.localStorage.setItem(k, '1');
+    window.localStorage.removeItem(k);
+    return true;
+  } catch {
+    lsBroken = true;
+    return false;
+  }
+}
+
+function lsRawGet(key: string): string | null {
+  if (lsTry()) {
+    try {
+      const v = window.localStorage.getItem(key);
+      if (v !== null) return v;
+    } catch {
+      lsBroken = true;
+    }
+  }
+  return lsMemory.get(key) ?? null;
+}
+
+function lsRawSet(key: string, value: string): void {
+  if (lsTry()) {
+    try {
+      window.localStorage.setItem(key, value);
+      return;
+    } catch {
+      lsBroken = true;
+    }
+  }
+  lsMemory.set(key, value);
+}
+
+function lsRawDel(key: string): void {
+  if (lsTry()) {
+    try {
+      window.localStorage.removeItem(key);
+      return;
+    } catch {
+      lsBroken = true;
+    }
+  }
+  lsMemory.delete(key);
+}
 
 async function idbUsable(): Promise<boolean> {
   if (idbBroken) return false;
@@ -30,18 +85,22 @@ async function idbUsable(): Promise<boolean> {
   }
 }
 
-export async function storageGet<T>(key: string): Promise<T | undefined> {
+export async function storageGet(key: string): Promise<string | null> {
   if (await idbUsable()) {
     try {
-      return (await idbGet<T>(key)) ?? undefined;
+      const v = await idbGet<string>(key);
+      if (v !== undefined && v !== null) return String(v);
     } catch {
       idbBroken = true;
     }
   }
-  return memory.get(key) as T | undefined;
+  const raw = lsRawGet(key);
+  if (raw !== null) return raw;
+  const m = memory.get(key);
+  return m === undefined || m === null ? null : String(m);
 }
 
-export async function storageSet(key: string, value: unknown): Promise<void> {
+export async function storageSet(key: string, value: string): Promise<void> {
   if (await idbUsable()) {
     try {
       await idbSet(key, value);
@@ -50,6 +109,7 @@ export async function storageSet(key: string, value: unknown): Promise<void> {
       idbBroken = true;
     }
   }
+  lsRawSet(key, value);
   memory.set(key, value);
 }
 
@@ -61,32 +121,15 @@ export async function storageDel(key: string): Promise<void> {
       idbBroken = true;
     }
   }
+  lsRawDel(key);
   memory.delete(key);
 }
 
 /** localStorage with in-memory fallback (for polling timestamps etc.). */
-const lsMemory = new Map<string, string>();
-let lsBroken = false;
-
 export function lsGet(key: string): string | null {
-  if (!lsBroken) {
-    try {
-      return window.localStorage.getItem(key);
-    } catch {
-      lsBroken = true;
-    }
-  }
-  return lsMemory.get(key) ?? null;
+  return lsRawGet(key);
 }
 
 export function lsSet(key: string, value: string): void {
-  if (!lsBroken) {
-    try {
-      window.localStorage.setItem(key, value);
-      return;
-    } catch {
-      lsBroken = true;
-    }
-  }
-  lsMemory.set(key, value);
+  lsRawSet(key, value);
 }

@@ -15,6 +15,7 @@ import Chip from '@mui/material/Chip';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useAuthStore } from '../stores/authStore';
 import { useNotificationsPolling } from '../api/polling';
+import ServerBanner from './ServerBanner';
 
 interface NavItem {
   to: string;
@@ -143,6 +144,7 @@ export default function Layout() {
         </List>
       </Drawer>
       <Box component="main" sx={{ flexGrow: 1, p: 3, mt: 8 }}>
+        <ServerBanner />
         <Outlet />
       </Box>
     </Box>

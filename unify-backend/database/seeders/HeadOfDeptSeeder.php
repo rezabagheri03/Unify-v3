@@ -10,7 +10,7 @@ class HeadOfDeptSeeder extends Seeder
 {
     public function run(): void
     {
-        User::updateOrCreate(
+        User::firstOrCreate(
             ['id' => '400000001'],
             [
                 'password_hash' => Hash::make('TempHead!2026', ['rounds' => 12]),

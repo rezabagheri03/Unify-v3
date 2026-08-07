@@ -10,7 +10,7 @@ class ExpertSeeder extends Seeder
 {
     public function run(): void
     {
-        User::updateOrCreate(
+        User::firstOrCreate(
             ['id' => '300000001'],
             [
                 'password_hash' => Hash::make('TempExpert!2026', ['rounds' => 12]),
