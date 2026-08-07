@@ -44,15 +44,21 @@ export default function Onboarding() {
     }
 
     try {
-      // Step 1: save name (informational; failing here shouldn't block password change)
-      await api.post('/onboarding', { first_name: firstName, last_name: lastName });
-
-      // Step 2: change the temp password — this is what activates the account.
+      // Step 1 (CRITICAL): change the temp password — this activates the
+      // account. Done FIRST so a later hiccup can never lose it.
       await api.post('/password/change', {
         old_password: oldPassword,
         new_password: newPassword,
         new_password_confirmation: newPasswordConf,
       });
+
+      // Step 2 (informational): save the name. If this fails, the account is
+      // still activated — don't block or confuse the user.
+      try {
+        await api.post('/onboarding', { first_name: firstName, last_name: lastName });
+      } catch (nameErr: any) {
+        console.warn('name save failed (non-fatal):', nameErr?.response?.status, nameErr?.message);
+      }
 
       updateUser({ first_name: firstName, last_name: lastName });
       setMustChangePassword(false);

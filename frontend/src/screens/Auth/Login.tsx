@@ -41,8 +41,11 @@ export default function Login() {
       <Typography variant="h4" align="center" gutterBottom>
         یونیفای
       </Typography>
-      <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 1 }}>
         سامانه دستیار دانشگاهی — ورود با کد دانشجویی / پرسنلی
+      </Typography>
+      <Typography variant="caption" align="center" display="block" color="text.secondary" sx={{ mb: 3 }}>
+        اگر رمز موقت خود را قبلاً تغییر داده‌اید، با رمز جدید وارد شوید.
       </Typography>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <form onSubmit={submit}>

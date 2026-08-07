@@ -1,0 +1,12 @@
+[2026-08-07 16:51:26] local.INFO: LOGIN_OK {"user_id":"400100001","role":"student","must_change_password":true,"ip":"127.0.0.1","time":"2026-08-07T16:51:26+00:00"} 
+[2026-08-07 16:51:38] local.INFO: LOGIN_OK {"user_id":"400100001","role":"student","must_change_password":true,"ip":"127.0.0.1","time":"2026-08-07T16:51:38+00:00"} 
+[2026-08-07 16:51:41] local.INFO: PASSWORD_CHANGE_OK {"user_id":"400100001","time":"2026-08-07T16:51:41+00:00"} 
+[2026-08-07 16:51:41] local.INFO: ONBOARDING_OK {"user_id":"400100001","time":"2026-08-07T16:51:41+00:00"} 
+[2026-08-07 16:51:47] local.INFO: LOGIN_OK {"user_id":"400100001","role":"student","must_change_password":false,"ip":"127.0.0.1","time":"2026-08-07T16:51:47+00:00"} 
+[2026-08-07 16:53:07] testing.INFO: LOGIN_OK {"user_id":"4054818159","role":"student","must_change_password":false,"ip":"127.0.0.1","time":"2026-08-07T16:53:07+00:00"} 
+[2026-08-07 16:53:07] testing.INFO: ONBOARDING_OK {"user_id":"4067136254","time":"2026-08-07T16:53:07+00:00"} 
+[2026-08-07 16:53:16] testing.INFO: PASSWORD_CHANGE_OK {"user_id":"4026113320","time":"2026-08-07T16:53:16+00:00"} 
+[2026-08-07 16:53:21] testing.INFO: PASSWORD_CHANGE_OK {"user_id":"4012776907","time":"2026-08-07T16:53:21+00:00"} 
+[2026-08-07 16:53:22] testing.INFO: PASSWORD_CHANGE_OK {"user_id":"4025855816","time":"2026-08-07T16:53:22+00:00"} 
+[2026-08-07 16:53:37] local.INFO: LOGIN_OK {"user_id":"400100001","role":"student","must_change_password":true,"ip":"127.0.0.1","time":"2026-08-07T16:53:37+00:00"} 
+[2026-08-07 16:53:37] local.INFO: LOGIN_OK {"user_id":"990000001","role":"owner","must_change_password":true,"ip":"127.0.0.1","time":"2026-08-07T16:53:37+00:00"} 

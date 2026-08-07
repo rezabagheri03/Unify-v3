@@ -63,12 +63,12 @@ api.interceptors.response.use(
   (res) => res,
   (error) => {
     if (error.response?.status === 401) {
-      // Session expired / invalid -> clear token from store + storage.
+      // Session invalid. Clear the token WITHOUT a hard page reload — a hard
+      // reload wipes in-memory state in storage-blocked contexts (sandboxed
+      // preview), permanently logging the user out. The auth store notifies
+      // subscribers and ProtectedRoute does a soft redirect instead.
       storageDel('auth_token');
       useAuthStore.getState().logout();
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login';
-      }
     }
     return Promise.reject(error);
   }

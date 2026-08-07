@@ -9,11 +9,19 @@
  * suite still runs. On a normal `composer install` (with dev deps) these
  * fallbacks are simply skipped.
  */
-if (! class_exists(\PHPUnit\Framework\TestCase::class) && file_exists('/tmp/phpunit.phar')) {
-    require '/tmp/phpunit.phar';
+$phpunitCandidates = ['/home/user/tools/phpunit.phar', '/tmp/phpunit.phar'];
+foreach ($phpunitCandidates as $phar) {
+    if (! class_exists(\PHPUnit\Framework\TestCase::class) && file_exists($phar)) {
+        require $phar;
+        break;
+    }
 }
-if (! class_exists(\Mockery::class) && file_exists('/tmp/devdeps/vendor/autoload.php')) {
-    require '/tmp/devdeps/vendor/autoload.php';
+$devdepsCandidates = ['/home/user/tools/devdeps/vendor/autoload.php', '/tmp/devdeps/vendor/autoload.php'];
+foreach ($devdepsCandidates as $devAutoload) {
+    if (! class_exists(\Mockery::class) && file_exists($devAutoload)) {
+        require $devAutoload;
+        break;
+    }
 }
 
 require __DIR__ . '/../vendor/autoload.php';

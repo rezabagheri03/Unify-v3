@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Crypt;
 
@@ -22,6 +23,13 @@ class AuthController extends Controller
         $user = User::where('id', $request->username)->first();
 
         if (!$user || !Hash::check($request->password, $user->password_hash)) {
+            Log::channel('auth')->warning('LOGIN_FAIL', [
+                'username' => $request->username,
+                'ip' => $request->ip(),
+                'user_exists' => (bool) $user,
+                'time' => now()->toIso8601String(),
+            ]);
+
             // Log failed login
             \App\Models\AuditLog::create([
                 'user_id' => $user?->id,
@@ -54,6 +62,14 @@ class AuthController extends Controller
 
         // Update last login
         $user->update(['last_login_at' => now()]);
+
+        Log::channel('auth')->info('LOGIN_OK', [
+            'user_id' => $user->id,
+            'role' => $user->role,
+            'must_change_password' => $user->must_change_password,
+            'ip' => $request->ip(),
+            'time' => now()->toIso8601String(),
+        ]);
 
         // Create Sanctum token
         $token = $user->createToken('unify-token')->plainTextToken;
@@ -99,6 +115,8 @@ class AuthController extends Controller
             'supplementary_details' => $request->supplementary_details,
         ]);
 
+        Log::channel('auth')->info('ONBOARDING_OK', ['user_id' => $user->id, 'time' => now()->toIso8601String()]);
+
         return response()->json(['message' => 'آنبوردینگ با موفقیت انجام شد']);
     }
 
@@ -112,6 +130,10 @@ class AuthController extends Controller
         $user = $request->user();
 
         if (!Hash::check($request->old_password, $user->password_hash)) {
+            Log::channel('auth')->warning('PASSWORD_CHANGE_FAIL_OLD', [
+                'user_id' => $user->id,
+                'time' => now()->toIso8601String(),
+            ]);
             return response()->json(['message' => 'رمز فعلی اشتباه است'], 400);
         }
 
@@ -136,6 +158,8 @@ class AuthController extends Controller
             'hash' => $previousHash,
             'created_at' => now(),
         ]);
+
+        Log::channel('auth')->info('PASSWORD_CHANGE_OK', ['user_id' => $user->id, 'time' => now()->toIso8601String()]);
 
         return response()->json(['message' => 'رمز عبور با موفقیت تغییر کرد']);
     }
