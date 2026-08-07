@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { get, set, del } from 'idb-keyval';
+import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
 
 interface AuthState {
   user: any | null;
@@ -18,19 +18,19 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
       mustChangePassword: false,
-      
+
       login: (user, token) => {
         set({ user, isAuthenticated: true, mustChangePassword: user.must_change_password || false });
         if (token) {
-          set('auth_token', token);
+          idbSet('auth_token', token);
         }
       },
-      
+
       logout: () => {
-        del('auth_token');
+        idbDel('auth_token');
         set({ user: null, isAuthenticated: false, mustChangePassword: false });
       },
-      
+
       setMustChangePassword: (value) => set((state) => ({
         mustChangePassword: value,
         user: state.user ? { ...state.user, must_change_password: value } : null,
@@ -44,14 +44,14 @@ export const useAuthStore = create<AuthState>()(
       name: 'unify-auth',
       getStorage: () => ({
         getItem: async (name) => {
-          const value = await get(name);
+          const value = await idbGet(name);
           return value ?? null;
         },
         setItem: async (name, value) => {
-          await set(name, value);
+          await idbSet(name, value);
         },
         removeItem: async (name) => {
-          await set(name, undefined);
+          await idbSet(name, undefined);
         },
       }),
     }

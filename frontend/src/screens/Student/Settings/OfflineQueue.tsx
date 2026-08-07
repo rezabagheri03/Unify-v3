@@ -1,47 +1,46 @@
 import React, { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import Chip from '@mui/material/Chip';
+import Button from '@mui/material/Button';
 import { SyncQueue } from '../../../db/idb';
 import { syncOfflineQueue } from '../../../utils/offlineSync';
 
-export default function OfflineQueue() {
-  const [queue, setQueue] = useState<any[]>([]);
+const STATUS_COLOR: Record<string, any> = {
+  pending: 'warning', syncing: 'info', synced: 'success', failed: 'error', conflict: 'error',
+};
 
-  const loadQueue = async () => {
-    const items = await SyncQueue.getAll();
-    setQueue(items);
+export default function SettingsOfflineQueue() {
+  const [items, setItems] = useState<any[]>([]);
+
+  const load = async () => {
+    setItems(await SyncQueue.getAll());
   };
 
   useEffect(() => {
-    loadQueue();
+    load();
   }, []);
 
-  const handleSync = async () => {
-    await syncOfflineQueue();
-    await loadQueue();
-  };
-
   return (
-    <div style={{ padding: 20 }}>
-      <h3>صف صف همگام‌سازی آفلاین</h3>
-      <button onClick={handleSync}>همگام‌سازی دستی</button>
-
-      <table style={{ width: '100%', marginTop: 16 }}>
-        <thead>
-          <tr>
-            <th>نوع</th>
-            <th>وضعیت</th>
-            <th>زمان</th>
-          </tr>
-        </thead>
-        <tbody>
-          {queue.map((item, index) => (
-            <tr key={index}>
-              <td>{item.type}</td>
-              <td>{item.status}</td>
-              <td>{new Date(item.created_at).toLocaleTimeString('fa-IR')}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Box>
+      <Typography variant="h5" gutterBottom>صف آفلاین</Typography>
+      <Button variant="contained" sx={{ mb: 2 }} onClick={async () => { await syncOfflineQueue(); load(); }}>
+        همگام‌سازی دستی
+      </Button>
+      {items.map((i: any) => (
+        <Card key={i.id} sx={{ mb: 1 }}>
+          <CardContent sx={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Box>
+              <Typography variant="subtitle2">{i.type}</Typography>
+              <Typography variant="caption" color="text.secondary">{i.created_at}</Typography>
+            </Box>
+            <Chip size="small" label={i.status} color={STATUS_COLOR[i.status] || 'default'} />
+          </CardContent>
+        </Card>
+      ))}
+      {items.length === 0 && <Typography color="text.secondary">صف خالی است</Typography>}
+    </Box>
   );
 }

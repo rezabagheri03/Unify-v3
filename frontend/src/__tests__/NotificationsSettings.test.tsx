@@ -1,16 +1,26 @@
 import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import NotificationsSettings from '../screens/Student/Settings/Notifications';
+jest.mock('../api/client', () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn().mockResolvedValue({ data: [] }),
+    post: jest.fn().mockResolvedValue({ data: {} }),
+    delete: jest.fn().mockResolvedValue({ data: {} }),
+  },
+  apiErrorMessage: (e: any, f: string) => f,
+}));
+
+import SettingsNotifications from '../screens/Student/Settings/Notifications';
 
 describe('NotificationsSettings', () => {
-  test('renders notifications polling settings', () => {
+  test('renders notifications settings', () => {
     render(
       <BrowserRouter>
-        <NotificationsSettings />
+        <SettingsNotifications />
       </BrowserRouter>
     );
 
-    expect(screen.getByText(/اعلان‌ها/i)).toBeInTheDocument();
-    expect(screen.getByText(/Polling ۳۰ ثانیه‌ای/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/اعلان‌ها/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/۳۰ ثانیه/i)).toBeInTheDocument();
   });
 });

@@ -66,8 +66,11 @@ class ResourceController extends Controller
             'title' => 'required|string|max:255',
             'description' => 'nullable|string|max:1000',
             'course_id' => 'required|exists:courses,id',
-            'professor_id' => 'required|exists:users,id',
+            'professor_id' => $user->role === 'professor' ? 'nullable' : 'required|exists:users,id',
         ]);
+
+        // Professors upload on their own behalf; students must name the professor.
+        $professorId = $user->role === 'professor' ? $user->id : $request->professor_id;
 
         $file = $request->file('file');
 
@@ -85,7 +88,7 @@ class ResourceController extends Controller
         // path; student uploads are staged under temp/ until approval (F05).
         $isProfessor = $user->role === 'professor';
         if ($isProfessor) {
-            $path = "resources/{$request->course_id}/{$request->professor_id}/{$filename}";
+            $path = "resources/{$request->course_id}/{$professorId}/{$filename}";
             Storage::disk('public')->put($path, file_get_contents($file));
             $tempPath = null;
         } else {
@@ -97,7 +100,7 @@ class ResourceController extends Controller
         $resource = Resource::create([
             'id' => Str::uuid(),
             'course_id' => $request->course_id,
-            'professor_id' => $request->professor_id,
+            'professor_id' => $professorId,
             'uploader_id' => $user->id,
             'title' => InputSanitizer::clean($request->title, 255),
             'description' => InputSanitizer::clean($request->description ?? '', 1000),

@@ -1,74 +1,60 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Box from '@mui/material/Box';
+import TextField from '@mui/material/TextField';
+import Button from '@mui/material/Button';
+import Typography from '@mui/material/Typography';
+import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
+import api, { apiErrorMessage } from '../../api/client';
 import { useAuthStore } from '../../stores/authStore';
-import api from '../../api/client';
 
 export default function Login() {
+  const navigate = useNavigate();
+  const login = useAuthStore((s) => s.login);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const navigate = useNavigate();
-  const { login } = useAuthStore();
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     setError('');
-
     try {
       const res = await api.post('/auth/login', { username, password });
-      
-      login(res.data.user, res.data.access_token);
-      
-      if (res.data.must_change_password) {
-        navigate('/onboarding');
-      } else {
-        navigate('/dashboard');
-      }
+      const { user, access_token } = res.data;
+      login(user, access_token);
+      navigate(user?.must_change_password ? '/onboarding' : '/dashboard');
     } catch (err: any) {
-      if (!err.response) {
-        setError('اتصال به سرور برقرار نشد. لطفاً backend را بررسی کنید.');
-        return;
-      }
-      if (err.response.status === 429) {
-        setError('تعداد تلاش‌های ورود زیاد است. لطفاً چند دقیقه صبر کنید.');
-        return;
-      }
-      setError(err.response?.data?.message || 'خطا در ورود');
+      setError(apiErrorMessage(err, 'نام کاربری یا رمز اشتباه است'));
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div style={{ padding: 40, maxWidth: 400, margin: '0 auto' }}>
-      <h1>Unify V9</h1>
-      <h2>ورود به سیستم</h2>
-      
-      <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          placeholder="شماره دانشجویی / شناسه"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          required
-          style={{ width: '100%', padding: 12, marginBottom: 12 }}
+    <Box sx={{ maxWidth: 420, mx: 'auto', mt: 12, p: 3 }}>
+      <Typography variant="h4" align="center" gutterBottom>
+        یونیفای
+      </Typography>
+      <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 3 }}>
+        سامانه دستیار دانشگاهی — ورود با کد دانشجویی / پرسنلی
+      </Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      <form onSubmit={submit}>
+        <TextField
+          fullWidth label="شماره دانشجویی / پرسنلی" variant="outlined" sx={{ mb: 2 }}
+          value={username} onChange={(e) => setUsername(e.target.value)} required autoFocus
         />
-        <input
-          type="password"
-          placeholder="رمز عبور"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          style={{ width: '100%', padding: 12, marginBottom: 12 }}
+        <TextField
+          fullWidth label="رمز عبور" type="password" variant="outlined" sx={{ mb: 3 }}
+          value={password} onChange={(e) => setPassword(e.target.value)} required
         />
-        <button type="submit" style={{ width: '100%', padding: 12 }}>
-          ورود
-        </button>
+        <Button type="submit" fullWidth variant="contained" size="large" disabled={loading}>
+          {loading ? <CircularProgress size={22} color="inherit" /> : 'ورود'}
+        </Button>
       </form>
-      
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      
-      <p style={{ marginTop: 20, fontSize: 12, color: '#666' }}>
-        نسخه ۹.۰ - آماده برای Pars Pack Cloud Host (50GB Evergreen)
-      </p>
-    </div>
+    </Box>
   );
 }

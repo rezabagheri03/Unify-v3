@@ -3,6 +3,10 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  define: {
+    // Injected at build time; keeps import.meta out of runtime source (jest-safe).
+    __UNIFY_API_URL__: JSON.stringify(process.env.VITE_API_URL || '/api/v1'),
+  },
   plugins: [
     react(),
     VitePWA({
@@ -44,6 +48,9 @@ export default defineConfig({
   ],
   server: {
     port: 5173,
+    // Accept the sandbox preview host (and any local host) so the live
+    // preview and LAN testing work without host allowlist errors.
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://localhost:8000',

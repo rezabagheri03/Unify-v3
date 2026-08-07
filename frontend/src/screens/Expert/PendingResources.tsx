@@ -1,67 +1,59 @@
 import React, { useEffect, useState } from 'react';
-import api from '../../api/client';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import Button from '@mui/material/Button';
+import Alert from '@mui/material/Alert';
+import api, { apiErrorMessage } from '../../api/client';
 
 export default function PendingResources() {
-  const [pending, setPending] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [pending, setPending] = useState<any[]>([]);
+  const [error, setError] = useState('');
 
-  const fetchPending = async () => {
-    setLoading(true);
+  const load = async () => {
     try {
       const res = await api.get('/admin/resources/pending');
-      setPending(res.data.data || []);
-    } finally {
-      setLoading(false);
+      setPending(Array.isArray(res.data?.data) ? res.data.data : []);
+    } catch (err: any) {
+      setError(apiErrorMessage(err));
     }
   };
 
   useEffect(() => {
-    fetchPending();
+    load();
   }, []);
 
-  const approve = async (id: string) => {
-    await api.post(`/admin/resources/${id}/approve`);
-    fetchPending();
+  const act = async (id: string, action: 'approve' | 'reject') => {
+    try {
+      await api.post(`/admin/resources/${id}/${action}`);
+      load();
+    } catch (err: any) {
+      setError(apiErrorMessage(err));
+    }
   };
-
-  const reject = async (id: string) => {
-    await api.post(`/admin/resources/${id}/reject`);
-    fetchPending();
-  };
-
-  if (loading) return <div style={{ padding: 24 }}>در حال بارگذاری...</div>;
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>منابع در انتظار تأیید ({pending.length})</h2>
-
-      {pending.length === 0 && <p>هیچ منبعی در انتظار تأیید نیست.</p>}
-
-      {pending.map((res: any) => (
-        <div key={res.id} style={{ 
-          padding: 16, 
-          border: '1px solid #ddd', 
-          borderRadius: 8, 
-          marginBottom: 12 
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <strong>{res.title}</strong>
-              <div style={{ fontSize: 13, color: '#666' }}>
-                توسط: {res.uploader?.first_name} {res.uploader?.last_name}
-              </div>
-            </div>
-            <div>
-              <button onClick={() => approve(res.id)} style={{ background: '#4caf50', color: 'white', marginRight: 8 }}>
-                تأیید
-              </button>
-              <button onClick={() => reject(res.id)} style={{ background: '#f44336', color: 'white' }}>
-                رد
-              </button>
-            </div>
-          </div>
-        </div>
+    <Box>
+      <Typography variant="h5" gutterBottom>منابع در انتظار تأیید</Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {pending.map((r: any) => (
+        <Card key={r.id} sx={{ mb: 1 }}>
+          <CardContent sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box>
+              <Typography variant="subtitle1">{r.title}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {r.course?.name} • {r.uploader?.first_name} {r.uploader?.last_name} • {r.file_size_bytes} بایت
+              </Typography>
+            </Box>
+            <Box>
+              <Button size="small" color="success" variant="contained" onClick={() => act(r.id, 'approve')} sx={{ mr: 1 }}>تأیید</Button>
+              <Button size="small" color="error" variant="outlined" onClick={() => act(r.id, 'reject')}>رد</Button>
+            </Box>
+          </CardContent>
+        </Card>
       ))}
-    </div>
+      {pending.length === 0 && <Typography color="text.secondary">موردی در انتظار نیست</Typography>}
+    </Box>
   );
 }

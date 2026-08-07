@@ -1,33 +1,62 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import api from './client';
 import { useAuthStore } from '../stores/authStore';
 
-export function useNotificationsPolling(intervalMs = 30000) {
+/**
+ * Notification polling (F15): 30s foreground / 120s background + 5s server cache.
+ * Returns new unread notifications since the last poll.
+ */
+export function useNotificationsPolling() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const { user } = useAuthStore();
+  const sinceRef = useRef<string>(localStorage.getItem('last_poll') || new Date(Date.now() - 5 * 60 * 1000).toISOString());
 
   useEffect(() => {
     if (!user) return;
 
-    const fetchNotifications = async () => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const poll = async () => {
       try {
-        const since = localStorage.getItem('last_poll') || new Date(Date.now() - 5 * 60 * 1000).toISOString();
-        const res = await api.get(`/notifications/unread?since=${since}`);
-        
-        if (res.data.length > 0) {
-          setNotifications(res.data);
-          localStorage.setItem('last_poll', new Date().toISOString());
+        const res = await api.get(`/notifications/unread?since=${encodeURIComponent(sinceRef.current)}`);
+        if (!cancelled && Array.isArray(res.data) && res.data.length > 0) {
+          setNotifications((prev) => {
+            const ids = new Set(prev.map((n) => n.id));
+            const fresh = res.data.filter((n: any) => !ids.has(n.id));
+            return [...fresh, ...prev].slice(0, 50);
+          });
+          sinceRef.current = new Date().toISOString();
+          localStorage.setItem('last_poll', sinceRef.current);
         }
       } catch (e) {
-        console.error('Polling error', e);
+        // silent: polling must never break the UI
       }
     };
 
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, intervalMs);
+    // Foreground 30s; background tab 120s (F15 / C5)
+    const interval = document.hidden ? 120000 : 30000;
+    poll();
+    timer = setTimeout(function tick() {
+      poll();
+      timer = setTimeout(tick, document.hidden ? 120000 : 30000);
+    }, interval);
 
-    return () => clearInterval(interval);
-  }, [user, intervalMs]);
+    const onVisibility = () => {
+      clearTimeout(timer);
+      timer = setTimeout(function tick() {
+        poll();
+        timer = setTimeout(tick, document.hidden ? 120000 : 30000);
+      }, document.hidden ? 120000 : 30000);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [user]);
 
   return notifications;
 }
