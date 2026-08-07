@@ -52,10 +52,10 @@ Route::prefix('v1')->group(function () {
     // ---- Authenticated ----
     Route::middleware('auth:sanctum')->group(function () {
 
-        // Auth
-        Route::post('/onboarding', [AuthController::class, 'onboarding']);
-        Route::post('/password/change', [AuthController::class, 'changePassword']);
-        Route::get('/users/me', fn (Request $request) => $request->user());
+        // Auth (with per-request logging so failures are visible)
+        Route::post('/onboarding', [AuthController::class, 'onboarding'])->middleware('reqlog');
+        Route::post('/password/change', [AuthController::class, 'changePassword'])->middleware('reqlog');
+        Route::get('/users/me', fn (Request $request) => $request->user())->middleware('reqlog');
 
         // Honor
         Route::get('/users/me/academic-status', [UserController::class, 'getAcademicStatus']);

@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Route-level middleware aliases used across routes/api.php
         $middleware->alias([
             'role' => \App\Http\Middleware\RoleMiddleware::class,
+            'reqlog' => \App\Http\Middleware\RequestLogger::class,
         ]);
 
         $middleware->api([

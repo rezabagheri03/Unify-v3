@@ -122,6 +122,17 @@ class AuthController extends Controller
 
     public function changePassword(Request $request)
     {
+        Log::channel('auth')->info('PASSWORD_CHANGE_ATTEMPT', [
+            'user_id' => $request->user()?->id,
+            'has_old' => filled($request->old_password),
+            'has_new' => filled($request->new_password),
+            'has_confirm' => filled($request->new_password_confirmation),
+            'new_len' => strlen((string) $request->new_password),
+            'new_matches_confirm' => $request->new_password === $request->new_password_confirmation,
+            'ip' => $request->ip(),
+            'time' => now()->toIso8601String(),
+        ]);
+
         $request->validate([
             'old_password' => 'required',
             'new_password' => 'required|min:8|confirmed',

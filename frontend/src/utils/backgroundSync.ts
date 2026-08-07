@@ -5,8 +5,11 @@ export function registerBackgroundSync() {
   if ('serviceWorker' in navigator) {
     const wb = new Workbox('/sw.js');
 
+    // NEVER hard-reload on SW activation: in storage-blocked contexts (sandboxed
+    // preview iframe) a reload wipes the in-memory session and kicks the user to
+    // login mid-flow. New SW builds are picked up on the next navigation instead.
     wb.addEventListener('controlling', () => {
-      window.location.reload();
+      console.debug('[unify] new service worker activated; keeping session');
     });
 
     // Registration may legitimately fail in dev (sw.js not served by Vite) or
