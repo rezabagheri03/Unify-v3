@@ -1,6 +1,6 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import { VitePWA } from 'vite-plugin-pwa'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   define: {
@@ -11,7 +11,11 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'logo.png'],
+      injectManifest: {
+        swSrc: 'src/sw.ts',
+        swDest: 'dist/sw.js',
+      },
+      includeAssets: ['favicon.ico', 'logo.png', 'offline.html'],
       manifest: {
         name: 'Unify - University Assistant',
         short_name: 'Unify',
@@ -21,30 +25,12 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         icons: [
-          {
-            src: 'logo.png',
-            sizes: '192x192',
-            type: 'image/png'
-          }
-        ]
-      },
-      workbox: {
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 5 }
-            }
-          }
+          { src: 'logo.png', sizes: '192x192', type: 'image/png' },
+          { src: 'logo.png', sizes: '512x512', type: 'image/png' },
         ],
-        navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api/],
-        skipWaiting: true,
-        clientsClaim: true,
-      }
-    })
+      },
+      devOptions: { enabled: false },
+    }),
   ],
   server: {
     port: 5173,
@@ -54,9 +40,9 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
-        changeOrigin: true
-      }
-    }
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     rollupOptions: {
@@ -64,11 +50,11 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           mui: ['@mui/material', '@emotion/react', '@emotion/styled'],
-          utils: ['date-fns', 'date-fns-jalali', 'axios']
-        }
-      }
+          utils: ['date-fns', 'date-fns-jalali', 'axios'],
+        },
+      },
     },
     chunkSizeWarningLimit: 300,
     reportCompressedSize: true,
-  }
-})
+  },
+});

@@ -1,39 +1,30 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Alert from '@mui/material/Alert';
+import api, { apiErrorMessage } from '../../api/client';
+import FileCard from '../../components/FileCard';
+import { useAuthStore } from '../../stores/authStore';
 
-export default function ProfessorResourcesList() {
-  const [resources] = useState([
-    { id: 1, title: 'جزوه برنامه‌نویسی.pdf', downloads: 145, rating: 4.8 },
-    { id: 2, title: 'اسلایدهای درس.pptx', downloads: 89, rating: 4.5 },
-    { id: 3, title: 'تمرین‌های حل شده.pdf', downloads: 203, rating: 4.9 },
-  ]);
+export default function ResourcesList() {
+  const { user } = useAuthStore();
+  const [resources, setResources] = useState<any[]>([]);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.get('/resources', { params: { professor_id: user?.id } })
+      .then((res) => setResources(res.data?.data || []))
+      .catch((err) => setError(apiErrorMessage(err)));
+  }, [user?.id]);
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>منابع من</h2>
-      
-      <table style={{ width: '100%', maxWidth: 700 }}>
-        <thead>
-          <tr style={{ background: '#f5f5f5' }}>
-            <th style={{ padding: 12, textAlign: 'right' }}>عنوان</th>
-            <th style={{ padding: 12, textAlign: 'right' }}>دانلود</th>
-            <th style={{ padding: 12, textAlign: 'right' }}>امتیاز</th>
-            <th style={{ padding: 12 }}>عملیات</th>
-          </tr>
-        </thead>
-        <tbody>
-          {resources.map(r => (
-            <tr key={r.id}>
-              <td style={{ padding: 12 }}>{r.title}</td>
-              <td style={{ padding: 12 }}>{r.downloads}</td>
-              <td style={{ padding: 12 }}>{r.rating}</td>
-              <td style={{ padding: 12 }}>
-                <button>ویرایش</button>
-                <button style={{ marginLeft: 8, color: 'red' }}>حذف</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Box>
+      <Typography variant="h5" gutterBottom>منابع من</Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {resources.map((r: any) => (
+        <FileCard key={r.id} id={r.id} title={r.title} author={r.course?.name} average_rating={r.average_rating} rating_count={r.rating_count} download_count={r.download_count} badge_type={r.badge_type} />
+      ))}
+      {resources.length === 0 && <Typography color="text.secondary">منبعی ثبت نشده</Typography>}
+    </Box>
   );
 }

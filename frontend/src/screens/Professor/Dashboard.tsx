@@ -1,29 +1,61 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Grid from '@mui/material/Grid';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import Alert from '@mui/material/Alert';
+import api, { apiErrorMessage } from '../../api/client';
 import { useAuthStore } from '../../stores/authStore';
 
 export default function ProfessorDashboard() {
   const { user } = useAuthStore();
-  const [stats] = useState({ students: 87, resources: 24, messages: 12 });
+  const [resources, setResources] = useState(0);
+  const [specs, setSpecs] = useState(0);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const [r, s] = await Promise.all([
+          api.get('/resources', { params: { professor_id: user?.id } }),
+          api.get('/specifications'),
+        ]);
+        if (!active) return;
+        setResources((r.data?.data || []).length);
+        setSpecs((s.data?.data || []).filter((x: any) => x.professor_id === user?.id).length);
+      } catch (err: any) {
+        if (active) setError(apiErrorMessage(err));
+      }
+    })();
+    return () => { active = false; };
+  }, [user?.id]);
+
+  const cards = [
+    { title: 'منابع من', value: resources },
+    { title: 'درس‌های من', value: specs },
+  ];
 
   return (
-    <div style={{ padding: 24 }}>
-      <h1>داشبورد استاد</h1>
-      <p>خوش آمدید، {user?.first_name}</p>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginTop: 24 }}>
-        <div style={{ background: '#e3f2fd', padding: 20, borderRadius: 12 }}>
-          <h3>👨‍🎓 دانشجویان</h3>
-          <p style={{ fontSize: 32, margin: 0 }}>{stats.students}</p>
-        </div>
-        <div style={{ background: '#e8f5e9', padding: 20, borderRadius: 12 }}>
-          <h3>📚 منابع</h3>
-          <p style={{ fontSize: 32, margin: 0 }}>{stats.resources}</p>
-        </div>
-        <div style={{ background: '#fff3e0', padding: 20, borderRadius: 12 }}>
-          <h3>✉️ پیام‌ها</h3>
-          <p style={{ fontSize: 32, margin: 0 }}>{stats.messages}</p>
-        </div>
-      </div>
-    </div>
+    <Box>
+      <Typography variant="h5" gutterBottom>داشبورد استاد</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        {user?.first_name} {user?.last_name} ({user?.id})
+      </Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      <Grid container spacing={2}>
+        {cards.map((c) => (
+          <Grid item xs={6} md={4} key={c.title}>
+            <Card>
+              <CardContent>
+                <Typography color="text.secondary" variant="body2">{c.title}</Typography>
+                <Typography variant="h4">{c.value}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+    </Box>
   );
 }

@@ -14,16 +14,16 @@ class ResourceTest extends TestCase
 
     public function test_student_can_upload_resource()
     {
-        $student = User::factory()->create(['role' => 'student']);
+        $student = User::factory()->create(['role' => 'student', 'academic_status_declared' => 'normal']);
+        $course = \App\Models\Course::factory()->create();
+        $professor = User::factory()->professor()->create();
         Storage::fake('public');
 
-        $file = UploadedFile::fake()->create('test.pdf', 1000, 'application/pdf');
-
-        $response = $this->actingAs($student)->postJson('/api/resources/upload', [
-            'file' => $file,
+        $response = $this->actingAs($student)->postJson('/api/v1/resources/upload', [
+            'file' => $this->fakePdf(),
             'title' => 'Test Resource',
-            'course_id' => 'CS101',
-            'professor_id' => $student->id,
+            'course_id' => $course->id,
+            'professor_id' => $professor->id,
         ]);
 
         $response->assertStatus(201);
@@ -31,25 +31,25 @@ class ResourceTest extends TestCase
 
     public function test_student_cannot_exceed_daily_quota()
     {
-        $student = User::factory()->create(['role' => 'student']);
+        $student = User::factory()->create(['role' => 'student', 'academic_status_declared' => 'normal']);
+        $course = \App\Models\Course::factory()->create();
+        $professor = User::factory()->professor()->create();
         Storage::fake('public');
 
         for ($i = 0; $i < 5; $i++) {
-            $file = UploadedFile::fake()->create("file{$i}.pdf", 500);
-            $this->actingAs($student)->postJson('/api/resources/upload', [
-                'file' => $file,
+            $this->actingAs($student)->postJson('/api/v1/resources/upload', [
+                'file' => $this->fakePdf("file{$i}.pdf"),
                 'title' => "Resource {$i}",
-                'course_id' => 'CS101',
-                'professor_id' => $student->id,
-            ]);
+                'course_id' => $course->id,
+                'professor_id' => $professor->id,
+            ])->assertStatus(201);
         }
 
-        $file = UploadedFile::fake()->create('file6.pdf', 500);
-        $response = $this->actingAs($student)->postJson('/api/resources/upload', [
-            'file' => $file,
+        $response = $this->actingAs($student)->postJson('/api/v1/resources/upload', [
+            'file' => $this->fakePdf('file6.pdf'),
             'title' => 'Resource 6',
-            'course_id' => 'CS101',
-            'professor_id' => $student->id,
+            'course_id' => $course->id,
+            'professor_id' => $professor->id,
         ]);
 
         $response->assertStatus(429);

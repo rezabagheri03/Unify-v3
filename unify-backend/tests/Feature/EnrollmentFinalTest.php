@@ -19,7 +19,7 @@ class EnrollmentFinalTest extends TestCase
             'status' => 'temporary'
         ]);
 
-        $response = $this->actingAs($student)->postJson('/api/enrollment/final');
+        $response = $this->actingAs($student)->postJson('/api/v1/enrollment/final');
 
         $response->assertStatus(200);
     }

@@ -1,32 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Card, CardContent, Typography, Chip } from '@mui/material';
+import AssignmentCard from '../src/components/AssignmentCard';
 
-const meta: Meta<any> = {
-  title: 'Components/AssignmentCard',
-  component: Card,
-};
-
+const meta: Meta<typeof AssignmentCard> = { title: 'Unify/AssignmentCard', component: AssignmentCard };
 export default meta;
+type Story = StoryObj<typeof AssignmentCard>;
 
-export const Pending: StoryObj = {
-  render: () => (
-    <Card>
-      <CardContent>
-        <Typography variant="subtitle1">تمرین ۳ - برنامه‌نویسی وب</Typography>
-        <Chip label="در انتظار" color="warning" size="small" />
-        <Typography variant="caption" display="block">مهلت: ۱۴۰۳/۰۵/۲۰</Typography>
-      </CardContent>
-    </Card>
-  ),
-};
-
-export const Submitted: StoryObj = {
-  render: () => (
-    <Card>
-      <CardContent>
-        <Typography variant="subtitle1">پروژه نهایی</Typography>
-        <Chip label="ارسال شده" color="success" size="small" />
-      </CardContent>
-    </Card>
-  ),
-};
+export const Graded: Story = { args: { assignment: { id: '1', title: 'تمرین ۱', status: 'graded', grade: 18.5, shamsi_original: '1403/08/15' } } };
+export const Late: Story = { args: { assignment: { id: '2', title: 'پروژه', status: 'late', due_date_g: '2024-10-01' } } };

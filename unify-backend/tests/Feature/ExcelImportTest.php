@@ -17,9 +17,19 @@ class ExcelImportTest extends TestCase
         $owner = User::factory()->create(['role' => 'owner']);
         Storage::fake('local');
 
-        $file = UploadedFile::fake()->create('users.xlsx', 100);
+        // Build a real .xlsx (PhpSpreadsheet) so the importer can read it.
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->fromArray([
+            ['شماره دانشجویی', 'نام', 'نام خانوادگی', 'نقش', 'دانشکده', 'وضعیت'],
+            ['500200001', 'علی', 'احمدی', 'student', 'CS', 'normal'],
+            ['500200002', 'مریم', 'کریمی', 'student', 'CS', 'gpa_a'],
+        ]);
+        $tmp = tempnam(sys_get_temp_dir(), 'imp') . '.xlsx';
+        (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet))->save($tmp);
+        $file = new \Illuminate\Http\UploadedFile($tmp, 'users.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
 
-        $response = $this->actingAs($owner)->postJson('/api/owner/users/bulk-import', [
+        $response = $this->actingAs($owner)->postJson('/api/v1/owner/users/bulk-import', [
             'file' => $file
         ]);
 

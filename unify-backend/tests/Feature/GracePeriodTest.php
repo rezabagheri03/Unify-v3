@@ -13,14 +13,15 @@ class GracePeriodTest extends TestCase
 
     public function test_grace_period_wipe_works()
     {
-        $semester = Semester::factory()->create([
+        // The current semester (seeded by TestCase) has an expired grace period.
+        Semester::where('id', '1403-1')->update([
             'grace_period_ends_at' => now()->subHour(),
-            'grace_period_handled' => false
+            'grace_period_handled' => false,
         ]);
 
         Enrollment::factory()->count(4)->create([
-            'semester_id' => $semester->id,
-            'status' => 'temporary'
+            'semester_id' => '1403-1',
+            'status' => 'temporary',
         ]);
 
         $this->artisan('enrollments:wipe-grace');

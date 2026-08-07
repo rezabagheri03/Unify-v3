@@ -1,33 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { ListItem, ListItemText, Avatar } from '@mui/material';
+import MessageRow from '../src/components/MessageRow';
 
-const meta: Meta<any> = {
-  title: 'Components/MessageRow',
-  component: ListItem,
-};
-
+const meta: Meta<typeof MessageRow> = { title: 'Unify/MessageRow', component: MessageRow };
 export default meta;
+type Story = StoryObj<typeof MessageRow>;
 
-export const Default: StoryObj = {
-  render: () => (
-    <ListItem>
-      <Avatar>ع</Avatar>
-      <ListItemText 
-        primary="یادآوری کلاس فردا" 
-        secondary="دکتر کریمی • ۲ ساعت پیش" 
-      />
-    </ListItem>
-  ),
-};
-
-export const WithPriority: StoryObj = {
-  render: () => (
-    <ListItem>
-      <Avatar>ا</Avatar>
-      <ListItemText 
-        primary="تغییر زمان امتحان" 
-        secondary="استاد هوش مصنوعی • مهم" 
-      />
-    </ListItem>
-  ),
-};
+export const Edited: Story = { args: { message: { id: '1', subject: 'تغییر برنامه', body: 'کلاس لغو شد', sender: { first_name: 'دکتر', last_name: 'رضایی' }, is_edited: true, sent_at: '2024-09-21T10:00:00Z', priority: 'high' } } };

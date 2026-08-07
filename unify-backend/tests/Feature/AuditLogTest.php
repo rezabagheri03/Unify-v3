@@ -14,7 +14,7 @@ class AuditLogTest extends TestCase
     {
         $owner = User::factory()->create(['role' => 'owner']);
 
-        $response = $this->actingAs($owner)->getJson('/api/owner/audit-logs');
+        $response = $this->actingAs($owner)->getJson('/api/v1/owner/audit-logs');
 
         $response->assertStatus(200);
     }

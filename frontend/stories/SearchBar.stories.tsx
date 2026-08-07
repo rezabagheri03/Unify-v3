@@ -1,25 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { TextField, InputAdornment } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
+import SearchBar from '../src/components/SearchBar';
 
-const meta: Meta<any> = {
-  title: 'Components/SearchBar',
-  component: TextField,
-  tags: ['autodocs'],
-};
-
+const meta: Meta<typeof SearchBar> = { title: 'Unify/SearchBar', component: SearchBar };
 export default meta;
+type Story = StoryObj<typeof SearchBar>;
 
-export const Default: StoryObj = {
-  args: {
-    placeholder: 'جستجو در درس‌ها...',
-    fullWidth: true,
-    InputProps: {
-      startAdornment: (
-        <InputAdornment position="start">
-          <SearchIcon />
-        </InputAdornment>
-      ),
-    },
-  },
-};
+export const Default: Story = { args: { placeholder: 'جستجوی درس...', onChange: () => {} } };

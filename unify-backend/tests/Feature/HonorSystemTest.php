@@ -14,7 +14,7 @@ class HonorSystemTest extends TestCase
     {
         $user = User::factory()->create(['role' => 'student']);
 
-        $response = $this->actingAs($user)->postJson('/api/users/me/academic-status', [
+        $response = $this->actingAs($user)->postJson('/api/v1/users/me/academic-status', [
             'status' => 'final_semester',
             'acknowledged' => true,
         ]);

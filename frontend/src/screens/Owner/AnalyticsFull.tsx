@@ -1,28 +1,53 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import Alert from '@mui/material/Alert';
+import api, { apiErrorMessage } from '../../api/client';
 
 export default function AnalyticsFull() {
-  return (
-    <div style={{ padding: 24 }}>
-      <h2>آنالیتیکس کامل</h2>
+  const [data, setData] = useState<any>(null);
+  const [error, setError] = useState('');
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-        <div style={{ background: '#e3f2fd', padding: 20, borderRadius: 8 }}>
-          <h4>کاربران فعال</h4>
-          <p style={{ fontSize: 32 }}>587</p>
-        </div>
-        <div style={{ background: '#e8f5e9', padding: 20, borderRadius: 8 }}>
-          <h4>منابع آپلود شده</h4>
-          <p style={{ fontSize: 32 }}>1,243</p>
-        </div>
-        <div style={{ background: '#fff3e0', padding: 20, borderRadius: 8 }}>
-          <h4>تیکت‌های حل شده</h4>
-          <p style={{ fontSize: 32 }}>312</p>
-        </div>
-        <div style={{ background: '#fce4ec', padding: 20, borderRadius: 8 }}>
-          <h4>حجم ذخیره‌سازی</h4>
-          <p style={{ fontSize: 32 }}>34.2 GB</p>
-        </div>
-      </div>
-    </div>
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const [r, t, u] = await Promise.all([
+          api.get('/resources'),
+          api.get('/tickets'),
+          api.get('/owner/export/users', { responseType: 'text' }).catch(() => ({ data: null })),
+        ]);
+        if (!active) return;
+        const tickets = Array.isArray(t.data?.data) ? t.data.data : Array.isArray(t.data) ? t.data : [];
+        const downloads = (r.data?.data || []).reduce((s: number, x: any) => s + (x.download_count || 0), 0);
+        setData({
+          resources: (r.data?.data || []).length,
+          downloads,
+          openTickets: tickets.filter((x: any) => ['open', 'in_progress'].includes(x.status)).length,
+          totalTickets: tickets.length,
+        });
+      } catch (err: any) {
+        if (active) setError(apiErrorMessage(err));
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  if (!data) return <Box><Typography variant="h5">گزارش‌ها</Typography>{error && <Alert severity="error">{error}</Alert>}</Box>;
+
+  return (
+    <Box>
+      <Typography variant="h5" gutterBottom>گزارش‌ها</Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      <Card>
+        <CardContent>
+          <Typography variant="subtitle1">منابع: {data.resources}</Typography>
+          <Typography variant="subtitle1">دانلود کل: {data.downloads}</Typography>
+          <Typography variant="subtitle1">تیکت باز: {data.openTickets} / {data.totalTickets}</Typography>
+        </CardContent>
+      </Card>
+    </Box>
   );
 }

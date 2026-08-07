@@ -1,49 +1,65 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import TextField from '@mui/material/TextField';
+import Alert from '@mui/material/Alert';
+import api, { apiErrorMessage } from '../../api/client';
 
 export default function FormsUniversity() {
-  const [forms, setForms] = useState([
-    { id: 1, title: 'فرم درخواست مرخصی', level: 'دانشگاه', active: true },
-    { id: 2, title: 'فرم انتخاب واحد', level: 'دانشگاه', active: true },
-    { id: 3, title: 'فرم اعتراض به نمره', level: 'دانشکده', active: true },
-    { id: 4, title: 'فرم درخواست خوابگاه', level: 'دانشگاه', active: false },
-  ]);
+  const [forms, setForms] = useState<any[]>([]);
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [error, setError] = useState('');
 
-  const toggle = (id: number) => {
-    setForms(forms.map(f => f.id === id ? { ...f, active: !f.active } : f));
+  const load = () => {
+    api.get('/forms').then((res) => setForms(Array.isArray(res.data) ? res.data : []))
+      .catch((err) => setError(apiErrorMessage(err)));
+  };
+  useEffect(() => { load(); }, []);
+
+  const create = async () => {
+    const fd = new FormData();
+    fd.append('title', title);
+    if (file) fd.append('file', file);
+    fd.append('is_university_level', '1');
+    try {
+      await api.post('/forms', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setOpen(false); setTitle(''); setFile(null);
+      load();
+    } catch (err: any) {
+      setError(apiErrorMessage(err));
+    }
   };
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>فرم‌های دانشگاهی</h2>
-      <button style={{ marginBottom: 16 }}>آپلود فرم جدید</button>
+    <Box>
+      <Typography variant="h5" gutterBottom>فرم‌های دانشگاهی</Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      <Button variant="contained" onClick={() => setOpen(true)} sx={{ mb: 2 }}>فرم دانشگاهی جدید</Button>
+      {forms.filter((f: any) => f.is_university_level).map((f: any) => (
+        <Box key={f.id} sx={{ p: 1, border: '1px solid #ddd', borderRadius: 1, mb: 1 }}>
+          <Typography variant="subtitle1">{f.title}</Typography>
+        </Box>
+      ))}
+      {forms.filter((f: any) => f.is_university_level).length === 0 && <Typography color="text.secondary">فرم دانشگاهی‌ای ثبت نشده</Typography>}
 
-      <table style={{ width: '100%', maxWidth: 800 }}>
-        <thead>
-          <tr style={{ background: '#f5f5f5' }}>
-            <th style={{ padding: 12, textAlign: 'right' }}>عنوان</th>
-            <th style={{ padding: 12, textAlign: 'right' }}>سطح</th>
-            <th style={{ padding: 12, textAlign: 'right' }}>وضعیت</th>
-            <th style={{ padding: 12 }}>عملیات</th>
-          </tr>
-        </thead>
-        <tbody>
-          {forms.map(f => (
-            <tr key={f.id}>
-              <td style={{ padding: 12 }}>{f.title}</td>
-              <td style={{ padding: 12 }}>{f.level}</td>
-              <td style={{ padding: 12 }}>
-                <span style={{ color: f.active ? 'green' : 'gray' }}>{f.active ? 'فعال' : 'غیرفعال'}</span>
-              </td>
-              <td style={{ padding: 12 }}>
-                <button onClick={() => toggle(f.id)}>
-                  {f.active ? 'غیرفعال کردن' : 'فعال کردن'}
-                </button>
-                <button style={{ marginLeft: 8 }}>دانلود</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+      <Dialog open={open} onClose={() => setOpen(false)} fullWidth>
+        <DialogTitle>فرم دانشگاهی جدید</DialogTitle>
+        <DialogContent>
+          <TextField fullWidth label="عنوان" value={title} onChange={(e) => setTitle(e.target.value)} sx={{ mb: 2, mt: 1 }} />
+          <input type="file" accept=".pdf,.docx" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpen(false)}>انصراف</Button>
+          <Button variant="contained" onClick={create} disabled={!title || !file}>ثبت</Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 }

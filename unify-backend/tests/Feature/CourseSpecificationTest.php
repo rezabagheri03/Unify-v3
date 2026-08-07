@@ -14,7 +14,7 @@ class CourseSpecificationTest extends TestCase
     {
         $student = User::factory()->create(['role' => 'student']);
 
-        $response = $this->actingAs($student)->getJson('/api/specifications');
+        $response = $this->actingAs($student)->getJson('/api/v1/specifications');
 
         $response->assertStatus(200);
     }

@@ -123,14 +123,17 @@ class AuthController extends Controller
             }
         }
 
+        // Keep the previous hash before overwriting so it can be stored in history.
+        $previousHash = $user->password_hash;
+
         $user->password_hash = Hash::make($request->new_password, ['rounds' => 12]);
         $user->must_change_password = false;
         $user->temporary_password_expires_at = null;
         $user->save();
 
-        // Save to password history
+        // Save the PREVIOUS password to history (so old passwords can't be reused).
         $user->passwordHistories()->create([
-            'hash' => $user->password_hash,
+            'hash' => $previousHash,
             'created_at' => now(),
         ]);
 

@@ -16,7 +16,7 @@ class ResourceStickyNoteTest extends TestCase
         $student = User::factory()->create(['role' => 'student']);
         $resource = Resource::factory()->create();
 
-        $response = $this->actingAs($student)->postJson("/api/resources/{$resource->id}/sticky-note", [
+        $response = $this->actingAs($student)->postJson("/api/v1/resources/{$resource->id}/sticky-note", [
             'note' => 'Private note'
         ]);
 

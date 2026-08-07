@@ -1,24 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Card, CardContent, Typography } from '@mui/material';
-import { motion } from 'framer-motion';
+import { ExamFlipCard } from '../src/components/FlipCard';
 
-const meta: Meta<any> = {
-  title: 'Components/FlipCard',
-  component: Card,
-};
-
+const meta: Meta = { title: 'Unify/FlipCard', component: ExamFlipCard };
 export default meta;
+type Story = StoryObj;
 
-export const ExamSchedule: StoryObj = {
-  render: () => (
-    <motion.div whileHover={{ rotateY: 180 }} style={{ width: 260, height: 160, perspective: 1000 }}>
-      <Card sx={{ width: '100%', height: '100%' }}>
-        <CardContent>
-          <Typography variant="h6">امتحان نهایی</Typography>
-          <Typography>برنامه‌نویسی وب</Typography>
-          <Typography variant="caption">۱۴۰۳/۱۰/۱۵ - ۹ صبح</Typography>
-        </CardContent>
-      </Card>
-    </motion.div>
-  ),
-};
+export const Flipped: Story = { render: () => <ExamFlipCard flipped courseName="فیزیک ۱" examDate="1403/04/20" midtermDate="1403/03/21" /> };
+export const Front: Story = { render: () => <ExamFlipCard courseName="فیزیک ۱" examDate="1403/04/20" /> };

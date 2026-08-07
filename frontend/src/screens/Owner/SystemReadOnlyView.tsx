@@ -1,20 +1,35 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import Alert from '@mui/material/Alert';
+import api, { apiErrorMessage } from '../../api/client';
 
 export default function SystemReadOnlyView() {
-  return (
-    <div style={{ padding: 24 }}>
-      <h2>نمای فقط خواندنی سیستم</h2>
-      <p style={{ color: '#666' }}>این بخش فقط برای مشاهده است</p>
+  const [info, setInfo] = useState<any>(null);
+  const [error, setError] = useState('');
 
-      <div style={{ marginTop: 20, background: '#f9f9f9', padding: 20, borderRadius: 8 }}>
-        <h4>وضعیت کلی سیستم</h4>
-        <ul>
-          <li>تعداد کاربران فعال: 587</li>
-          <li>تعداد منابع: 1,243</li>
-          <li>حجم استفاده شده: 34.2 GB / 50 GB</li>
-          <li>وضعیت: عادی</li>
-        </ul>
-      </div>
-    </div>
+  useEffect(() => {
+    api.get('/health')
+      .then((res) => setInfo(res.data))
+      .catch((err) => setError(apiErrorMessage(err)));
+  }, []);
+
+  return (
+    <Box>
+      <Typography variant="h5" gutterBottom>وضعیت سیستم</Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {info && (
+        <Card>
+          <CardContent>
+            <Typography variant="subtitle1">وضعیت: {info.status}</Typography>
+            <Typography variant="subtitle1">نسخه: {info.version}</Typography>
+            <Typography variant="subtitle1">حالت: {info.mode}</Typography>
+            <Typography variant="body2" color="text.secondary">{info.timestamp}</Typography>
+          </CardContent>
+        </Card>
+      )}
+    </Box>
   );
 }

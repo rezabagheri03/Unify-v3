@@ -19,7 +19,7 @@ class BrandingTest extends TestCase
 
         $file = UploadedFile::fake()->image('logo.png');
 
-        $response = $this->actingAs($admin)->postJson('/api/admin/branding/logo', [
+        $response = $this->actingAs($admin)->postJson('/api/v1/admin/branding/logo', [
             'logo' => $file
         ]);
 

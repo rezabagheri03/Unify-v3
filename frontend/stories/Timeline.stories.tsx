@@ -1,25 +1,15 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Card, CardContent, Typography } from '@mui/material';
+import Timeline from '../src/components/Timeline';
 
-const meta: Meta<any> = {
-  title: 'Components/Timeline',
-  component: Card,
-};
-
+const meta: Meta<typeof Timeline> = { title: 'Unify/Timeline', component: Timeline };
 export default meta;
+type Story = StoryObj<typeof Timeline>;
 
-export const AcademicCalendar: StoryObj = {
-  render: () => (
-    <Card>
-      <CardContent>
-        <Typography variant="h6" gutterBottom>تقویم تحصیلی ۱۴۰۳-۲</Typography>
-        <ul style={{ paddingLeft: 20 }}>
-          <li>شروع نیمسال: ۱۴۰۳/۰۷/۰۱</li>
-          <li>مهلت حذف و اضافه: ۱۴۰۳/۰۷/۱۵</li>
-          <li>امتحانات میان‌ترم: ۱۴۰۳/۰۹/۱۰</li>
-          <li>امتحانات نهایی: ۱۴۰۳/۱۰/۱۵</li>
-        </ul>
-      </CardContent>
-    </Card>
-  ),
+export const Default: Story = {
+  args: {
+    events: [
+      { id: '1', title: 'شروع ثبت‌نام', description: 'آغاز ثبت‌نام', start_date_g: '2024-09-20', event_type: 'registration_open', color_code: '#4CAF50' },
+      { id: '2', title: 'پایان ثبت‌نام', description: 'مهلت', start_date_g: '2024-09-28', event_type: 'registration_close', color_code: '#F44336' },
+    ],
+  },
 };

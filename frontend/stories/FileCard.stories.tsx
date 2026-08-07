@@ -1,32 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Card, CardContent, Typography, Chip } from '@mui/material';
+import FileCard from '../src/components/FileCard';
 
-const meta: Meta<any> = {
-  title: 'Components/FileCard',
-  component: Card,
-};
-
+const meta: Meta<typeof FileCard> = { title: 'Unify/FileCard', component: FileCard };
 export default meta;
+type Story = StoryObj<typeof FileCard>;
 
-export const PDF: StoryObj = {
-  render: () => (
-    <Card sx={{ maxWidth: 280 }}>
-      <CardContent>
-        <Typography>جزوه برنامه‌نویسی.pdf</Typography>
-        <Chip label="PDF • 2.4 MB" size="small" />
-        <Typography variant="caption" display="block">امتیاز: 4.5 (۱۲ رای) • ۳۴۵ دانلود</Typography>
-      </CardContent>
-    </Card>
-  ),
+export const ProfessorPdf: Story = {
+  args: { id: '1', title: 'جزوه فصل ۳', author: 'دکتر رضایی', average_rating: 4.2, rating_count: 15, download_count: 120, badge_type: 'professor', mime: 'application/pdf' },
 };
-
-export const ProfessorBadge: StoryObj = {
-  render: () => (
-    <Card sx={{ maxWidth: 280, border: '1px solid #4caf50' }}>
-      <CardContent>
-        <Typography>اسلایدهای درس.pptx</Typography>
-        <Chip label="استاد" color="success" size="small" />
-      </CardContent>
-    </Card>
-  ),
+export const StudentDocx: Story = {
+  args: { id: '2', title: 'خلاصه نکات', author: 'سارا احمدی', average_rating: null, rating_count: 0, download_count: 3, badge_type: null, mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
 };

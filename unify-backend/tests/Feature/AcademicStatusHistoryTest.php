@@ -14,7 +14,7 @@ class AcademicStatusHistoryTest extends TestCase
     {
         $student = User::factory()->create(['role' => 'student']);
 
-        $this->actingAs($student)->postJson('/api/users/me/academic-status', [
+        $this->actingAs($student)->postJson('/api/v1/users/me/academic-status', [
             'status' => 'final_semester',
             'acknowledged' => true
         ]);

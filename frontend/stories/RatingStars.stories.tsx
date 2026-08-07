@@ -1,32 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Rating, Box, Typography } from '@mui/material';
+import RatingStars from '../src/components/RatingStars';
 
-const meta: Meta<any> = {
-  title: 'Components/RatingStars',
-  component: Rating,
-  tags: ['autodocs'],
-};
-
+const meta: Meta<typeof RatingStars> = { title: 'Unify/RatingStars', component: RatingStars };
 export default meta;
+type Story = StoryObj<typeof RatingStars>;
 
-export const ReadOnly: StoryObj = {
-  args: {
-    value: 4.5,
-    readOnly: true,
-  },
-};
-
-export const Interactive: StoryObj = {
-  args: {
-    defaultValue: 3,
-  },
-};
-
-export const WithLabel: StoryObj = {
-  render: () => (
-    <Box>
-      <Typography>امتیاز شما:</Typography>
-      <Rating defaultValue={4} />
-    </Box>
-  ),
-};
+export const Interactive: Story = { args: { value: 3, readonly: false } };
+export const Readonly: Story = { args: { value: 5, readonly: true } };

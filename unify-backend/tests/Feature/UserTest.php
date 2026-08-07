@@ -14,7 +14,7 @@ class UserTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $response = $this->actingAs($user)->getJson('/api/users/me');
+        $response = $this->actingAs($user)->getJson('/api/v1/users/me');
 
         $response->assertStatus(200)
                  ->assertJson(['id' => $user->id]);
@@ -23,10 +23,10 @@ class UserTest extends TestCase
     public function test_user_can_change_password()
     {
         $user = User::factory()->create([
-            'password_hash' => bcrypt('OldPass123!')
+            'password_hash' => \Illuminate\Support\Facades\Hash::make('OldPass123!')
         ]);
 
-        $response = $this->actingAs($user)->postJson('/api/password/change', [
+        $response = $this->actingAs($user)->postJson('/api/v1/password/change', [
             'old_password' => 'OldPass123!',
             'new_password' => 'NewPass123!',
             'new_password_confirmation' => 'NewPass123!'
@@ -38,16 +38,16 @@ class UserTest extends TestCase
     public function test_user_cannot_reuse_old_password()
     {
         $user = User::factory()->create([
-            'password_hash' => bcrypt('OldPass123!')
+            'password_hash' => \Illuminate\Support\Facades\Hash::make('OldPass123!')
         ]);
 
-        $this->actingAs($user)->postJson('/api/password/change', [
+        $this->actingAs($user)->postJson('/api/v1/password/change', [
             'old_password' => 'OldPass123!',
             'new_password' => 'NewPass123!',
             'new_password_confirmation' => 'NewPass123!'
         ]);
 
-        $response = $this->actingAs($user)->postJson('/api/password/change', [
+        $response = $this->actingAs($user)->postJson('/api/v1/password/change', [
             'old_password' => 'NewPass123!',
             'new_password' => 'OldPass123!',
             'new_password_confirmation' => 'OldPass123!'

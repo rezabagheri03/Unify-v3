@@ -1,26 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Chip } from '@mui/material';
+import GradeChip from '../src/components/GradeChip';
 
-const meta: Meta<any> = {
-  title: 'Components/GradeChip',
-  component: Chip,
-  tags: ['autodocs'],
-};
-
+const meta: Meta<typeof GradeChip> = { title: 'Unify/GradeChip', component: GradeChip };
 export default meta;
+type Story = StoryObj<typeof GradeChip>;
 
-export const Passed: StoryObj = {
-  args: { label: 'قبول', color: 'success' },
-};
-
-export const Failed: StoryObj = {
-  args: { label: 'مردود', color: 'error' },
-};
-
-export const Conditional: StoryObj = {
-  args: { label: 'مشروط', color: 'warning' },
-};
-
-export const FinalSemester: StoryObj = {
-  args: { label: 'ترم آخر', color: 'info' },
-};
+export const Pass: Story = { args: { grade: 17.5 } };
+export const Fail: Story = { args: { grade: 8 } };
+export const Empty: Story = { args: { grade: null } };

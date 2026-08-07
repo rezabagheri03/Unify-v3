@@ -1,18 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Box, Typography, Button } from '@mui/material';
+import EmptyState from '../src/components/EmptyState';
 
-const meta: Meta<any> = {
-  title: 'Components/EmptyState',
-  component: Box,
-};
-
+const meta: Meta<typeof EmptyState> = { title: 'Unify/EmptyState', component: EmptyState };
 export default meta;
+type Story = StoryObj<typeof EmptyState>;
 
-export const NoData: StoryObj = {
-  render: () => (
-    <Box textAlign="center" py={6}>
-      <Typography variant="h6" gutterBottom>داده‌ای یافت نشد</Typography>
-      <Button variant="outlined">بارگذاری مجدد</Button>
-    </Box>
-  ),
-};
+export const WithCta: Story = { args: { title: 'برنامه شما خالی است', actionLabel: 'انتخاب واحد', onAction: () => {} } };

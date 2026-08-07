@@ -14,7 +14,7 @@ class TicketTest extends TestCase
     {
         $student = User::factory()->create(['role' => 'student']);
 
-        $response = $this->actingAs($student)->postJson('/api/tickets', [
+        $response = $this->actingAs($student)->postJson('/api/v1/tickets', [
             'department' => 'education',
             'subject' => 'Problem with enrollment',
             'description' => 'I cannot add a course'

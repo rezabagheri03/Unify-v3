@@ -19,8 +19,8 @@ class ResourceVersioningTest extends TestCase
             'status' => 'approved'
         ]);
 
-        $response = $this->actingAs($professor)->postJson("/api/resources/{$resource->id}/new-version", [
-            'file' => \Illuminate\Http\UploadedFile::fake()->create('new.pdf', 1000)
+        $response = $this->actingAs($professor)->postJson("/api/v1/resources/{$resource->id}/new-version", [
+            'file' => $this->fakePdf('new.pdf')
         ]);
 
         $response->assertStatus(201);

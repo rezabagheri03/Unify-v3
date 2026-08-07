@@ -15,7 +15,7 @@ class MessageTest extends TestCase
         $sender = User::factory()->create();
         $recipient = User::factory()->create();
 
-        $response = $this->actingAs($sender)->postJson('/api/messages/send', [
+        $response = $this->actingAs($sender)->postJson('/api/v1/messages/send', [
             'recipient_id' => $recipient->id,
             'subject' => 'Test',
             'body' => 'Hello'

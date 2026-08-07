@@ -14,7 +14,7 @@ class StorageStatsTest extends TestCase
     {
         $owner = User::factory()->create(['role' => 'owner']);
 
-        $response = $this->actingAs($owner)->getJson('/api/monitoring/storage');
+        $response = $this->actingAs($owner)->getJson('/api/v1/monitoring/storage');
 
         $response->assertStatus(200)
                  ->assertJsonStructure(['used_bytes', 'used_gb', 'limit_gb', 'percentage']);

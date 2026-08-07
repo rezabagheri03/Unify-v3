@@ -1,21 +1,29 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Alert from '@mui/material/Alert';
+import api, { apiErrorMessage } from '../../api/client';
+import TicketRow from '../../components/TicketRow';
 
 export default function TicketsEscalated() {
-  const [tickets] = useState([
-    { id: 1, subject: 'مشکل در انتخاب واحد', level: 2 },
-    { id: 2, subject: 'عدم دسترسی به منابع', level: 1 },
-  ]);
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.get('/tickets', { params: { escalated: 1 } })
+      .then((res) => {
+        const list = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
+        setTickets(list);
+      })
+      .catch((err) => setError(apiErrorMessage(err)));
+  }, []);
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>تیکت‌های escalate شده ({tickets.length})</h2>
-      
-      {tickets.map(t => (
-        <div key={t.id} style={{ padding: 12, border: '1px solid #ff9800', marginBottom: 8 }}>
-          {t.subject} — سطح {t.level}
-          <button style={{ marginLeft: 16 }}>بررسی</button>
-        </div>
-      ))}
-    </div>
+    <Box>
+      <Typography variant="h5" gutterBottom>تیکت‌های ارجاع‌شده</Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {tickets.map((t: any) => <TicketRow key={t.id} ticket={t} />)}
+      {tickets.length === 0 && <Typography color="text.secondary">تیکت ارجاع‌شده‌ای نیست</Typography>}
+    </Box>
   );
 }

@@ -15,7 +15,7 @@ class SemesterTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        $response = $this->actingAs($admin)->postJson('/api/admin/semesters', [
+        $response = $this->actingAs($admin)->postJson('/api/v1/admin/semesters', [
             'name' => '1403-2',
             'start_shamsi' => '1403/07/01',
             'end_shamsi' => '1404/01/31',

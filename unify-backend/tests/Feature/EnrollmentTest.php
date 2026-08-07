@@ -27,11 +27,11 @@ class EnrollmentTest extends TestCase
             'time_end' => '11:00'
         ]);
 
-        $this->actingAs($student)->postJson('/api/enrollment/temp', [
+        $this->actingAs($student)->postJson('/api/v1/enrollment/temp', [
             'specification_id' => $spec1->id
         ]);
 
-        $response = $this->actingAs($student)->postJson('/api/enrollment/temp', [
+        $response = $this->actingAs($student)->postJson('/api/v1/enrollment/temp', [
             'specification_id' => $spec2->id
         ]);
 
@@ -47,7 +47,7 @@ class EnrollmentTest extends TestCase
             'status' => 'temporary'
         ]);
 
-        $response = $this->actingAs($student)->postJson('/api/enrollment/final');
+        $response = $this->actingAs($student)->postJson('/api/v1/enrollment/final');
 
         $response->assertStatus(200);
     }

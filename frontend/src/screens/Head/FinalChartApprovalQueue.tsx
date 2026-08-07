@@ -1,35 +1,52 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import Button from '@mui/material/Button';
+import Alert from '@mui/material/Alert';
+import api, { apiErrorMessage } from '../../api/client';
+import StatusBadge from '../../components/StatusBadge';
 
 export default function FinalChartApprovalQueue() {
-  const [queue, setQueue] = useState([
-    { id: 1, title: 'نمودار ورودی ۱۴۰۱', status: 'pending' },
-    { id: 2, title: 'نمودار ورودی ۱۴۰۲', status: 'pending' },
-  ]);
+  const [charts, setCharts] = useState<any[]>([]);
+  const [error, setError] = useState('');
 
-  const approve = (id: number) => {
-    setQueue(queue.map(q => q.id === id ? { ...q, status: 'approved' } : q));
+  const load = () => {
+    api.get('/curriculum', { params: { status: 'pending_approval' } })
+      .then((res) => setCharts(Array.isArray(res.data) ? res.data : []))
+      .catch((err) => setError(apiErrorMessage(err)));
+  };
+  useEffect(() => { load(); }, []);
+
+  const act = async (id: string, action: 'approve' | 'reject') => {
+    try {
+      await api.post(`/curriculum/${id}/${action}`);
+      load();
+    } catch (err: any) {
+      setError(apiErrorMessage(err));
+    }
   };
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>صف تأیید نمودار درسی</h2>
-
-      {queue.map(item => (
-        <div key={item.id} style={{ 
-          padding: 16, 
-          border: '1px solid #ddd', 
-          marginBottom: 12,
-          background: item.status === 'approved' ? '#e8f5e9' : '#fff'
-        }}>
-          <strong>{item.title}</strong>
-          <span style={{ marginLeft: 16, color: item.status === 'approved' ? 'green' : 'orange' }}>
-            {item.status === 'approved' ? 'تأیید شده' : 'در انتظار'}
-          </span>
-          {item.status === 'pending' && (
-            <button onClick={() => approve(item.id)} style={{ marginLeft: 16 }}>تأیید نهایی</button>
-          )}
-        </div>
+    <Box>
+      <Typography variant="h5" gutterBottom>صف تأیید نمودار درسی</Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {charts.map((c: any) => (
+        <Card key={c.id} sx={{ mb: 1 }}>
+          <CardContent sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box>
+              <Typography variant="subtitle1">نمودار ورودی {c.entry_year}</Typography>
+              <StatusBadge status={c.status} />
+            </Box>
+            <Box>
+              <Button size="small" color="success" variant="contained" onClick={() => act(c.id, 'approve')} sx={{ mr: 1 }}>تأیید</Button>
+              <Button size="small" color="error" variant="outlined" onClick={() => act(c.id, 'reject')}>برگشت</Button>
+            </Box>
+          </CardContent>
+        </Card>
       ))}
-    </div>
+      {charts.length === 0 && <Typography color="text.secondary">نموداری در انتظار تأیید نیست</Typography>}
+    </Box>
   );
 }

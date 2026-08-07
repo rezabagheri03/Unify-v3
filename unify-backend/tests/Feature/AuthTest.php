@@ -13,10 +13,10 @@ class AuthTest extends TestCase
     public function test_user_can_login()
     {
         $user = User::factory()->create([
-            'password_hash' => bcrypt('password123')
+            'password_hash' => \Illuminate\Support\Facades\Hash::make('password123')
         ]);
 
-        $response = $this->postJson('/api/auth/login', [
+        $response = $this->postJson('/api/v1/auth/login', [
             'username' => $user->id,
             'password' => 'password123'
         ]);
@@ -29,7 +29,7 @@ class AuthTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $response = $this->actingAs($user)->postJson('/api/onboarding', [
+        $response = $this->actingAs($user)->postJson('/api/v1/onboarding', [
             'first_name' => 'Ali',
             'last_name' => 'Ahmadi'
         ]);

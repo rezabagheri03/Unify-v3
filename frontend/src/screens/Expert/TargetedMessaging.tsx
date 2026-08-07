@@ -1,33 +1,44 @@
 import React, { useState } from 'react';
-import api from '../../api/client';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import TextField from '@mui/material/TextField';
+import Button from '@mui/material/Button';
+import Alert from '@mui/material/Alert';
+import Snackbar from '@mui/material/Snackbar';
+import api, { apiErrorMessage } from '../../api/client';
 
 export default function TargetedMessaging() {
-  const [form, setForm] = useState({ recipients: '', subject: '', body: '' });
-  const [loading, setLoading] = useState(false);
+  const [recipientId, setRecipientId] = useState('');
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [snack, setSnack] = useState('');
+  const [error, setError] = useState('');
 
   const send = async () => {
-    if (!form.body) return;
-    setLoading(true);
     try {
-      await api.post('/messages/send', {
-        recipient_ids: form.recipients.split(',').map(s => s.trim()),
-        subject: form.subject,
-        body: form.body
-      });
-      alert('پیام ارسال شد');
-      setForm({ recipients: '', subject: '', body: '' });
-    } finally {
-      setLoading(false);
+      await api.post('/messages/send', { recipient_id: recipientId, subject, body });
+      setSnack('پیام خصوصی ارسال شد');
+      setRecipientId(''); setSubject(''); setBody('');
+    } catch (err: any) {
+      setSnack(apiErrorMessage(err, 'ارسال ناموفق (ضد شمارش: پاسخ یکسان برای کاربر نامعتبر)'));
     }
   };
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>پیام‌رسانی هدفمند</h2>
-      <input placeholder="شناسه‌ها (جدا با کاما)" value={form.recipients} onChange={e => setForm({ ...form, recipients: e.target.value })} style={{ width: '100%', maxWidth: 500, padding: 8, marginBottom: 8 }} />
-      <input placeholder="موضوع" value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} style={{ width: '100%', maxWidth: 500, padding: 8, marginBottom: 8 }} />
-      <textarea placeholder="متن پیام" value={form.body} onChange={e => setForm({ ...form, body: e.target.value })} rows={5} style={{ width: '100%', maxWidth: 500, padding: 8 }} />
-      <button onClick={send} disabled={loading} style={{ marginTop: 12 }}>ارسال پیام</button>
-    </div>
+    <Box>
+      <Typography variant="h5" gutterBottom>پیام گروهی / خصوصی</Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      <Card>
+        <CardContent>
+          <TextField fullWidth label="شناسه گیرنده (اختیاری — خالی = پیام سیستمی)" value={recipientId} onChange={(e) => setRecipientId(e.target.value)} sx={{ mb: 2 }} />
+          <TextField fullWidth label="موضوع" value={subject} onChange={(e) => setSubject(e.target.value)} sx={{ mb: 2 }} />
+          <TextField fullWidth label="متن" multiline rows={4} value={body} onChange={(e) => setBody(e.target.value)} sx={{ mb: 2 }} />
+          <Button variant="contained" onClick={send} disabled={!body}>ارسال</Button>
+        </CardContent>
+      </Card>
+      <Snackbar open={!!snack} autoHideDuration={5000} onClose={() => setSnack('')} message={snack} />
+    </Box>
   );
 }

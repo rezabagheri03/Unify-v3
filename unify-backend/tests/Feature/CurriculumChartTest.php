@@ -14,7 +14,7 @@ class CurriculumChartTest extends TestCase
     {
         $expert = User::factory()->create(['role' => 'expert']);
 
-        $response = $this->actingAs($expert)->postJson('/api/curriculum', [
+        $response = $this->actingAs($expert)->postJson('/api/v1/curriculum', [
             'department_id' => 'CS',
             'entry_year' => 1401,
             'chart_data' => ['semesters' => []]

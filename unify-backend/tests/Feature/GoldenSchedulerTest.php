@@ -14,7 +14,7 @@ class GoldenSchedulerTest extends TestCase
     {
         $student = User::factory()->create(['role' => 'student']);
 
-        $response = $this->actingAs($student)->getJson('/api/golden-schedule');
+        $response = $this->actingAs($student)->getJson('/api/v1/golden-schedule');
 
         $response->assertStatus(200)
                  ->assertJsonStructure(['suggestions']);

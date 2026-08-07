@@ -14,7 +14,7 @@ class DeviceTokenTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $response = $this->actingAs($user)->postJson('/api/devices', [
+        $response = $this->actingAs($user)->postJson('/api/v1/devices', [
             'token' => 'test-token-123',
             'provider' => 'pushe',
             'platform' => 'android'

@@ -1,32 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Card, CardContent, Typography, Button, Switch } from '@mui/material';
+import ThemePreview from '../src/components/ThemePreview';
 
-const meta: Meta<any> = {
-  title: 'Components/ThemePreview',
-  component: Card,
-};
-
+const meta: Meta<typeof ThemePreview> = { title: 'Unify/ThemePreview', component: ThemePreview };
 export default meta;
+type Story = StoryObj<typeof ThemePreview>;
 
-export const LightMode: StoryObj = {
-  render: () => (
-    <Card>
-      <CardContent>
-        <Typography>تم روشن</Typography>
-        <Button variant="contained">دکمه</Button>
-      </CardContent>
-    </Card>
-  ),
-};
-
-export const DarkMode: StoryObj = {
-  render: () => (
-    <Card sx={{ bgcolor: '#121212', color: 'white' }}>
-      <CardContent>
-        <Typography>تم دارک</Typography>
-        <Button variant="contained" color="primary">دکمه</Button>
-        <Switch />
-      </CardContent>
-    </Card>
-  ),
-};
+export const Default: Story = { args: { active: 'Unify Blue', onSelect: () => {} } };

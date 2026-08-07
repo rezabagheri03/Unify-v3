@@ -1,21 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Chip, Box } from '@mui/material';
+import OfflineQueueRow from '../src/components/OfflineQueueRow';
 
-const meta: Meta<any> = {
-  title: 'Components/OfflineQueueRow',
-  component: Box,
-};
-
+const meta: Meta<typeof OfflineQueueRow> = { title: 'Unify/OfflineQueueRow', component: OfflineQueueRow };
 export default meta;
+type Story = StoryObj<typeof OfflineQueueRow>;
 
-export const Pending: StoryObj = {
-  render: () => <Chip label="در صف همگام‌سازی" color="warning" />,
-};
-
-export const Synced: StoryObj = {
-  render: () => <Chip label="همگام‌سازی شد" color="success" />,
-};
-
-export const Failed: StoryObj = {
-  render: () => <Chip label="ناموفق" color="error" />,
-};
+export const Pending: Story = { args: { item: { id: 1, type: 'rating', status: 'pending', created_at: '2024-09-21T10:00:00Z' } } };
+export const Failed: Story = { args: { item: { id: 2, type: 'ticket_reply', status: 'failed', last_error: 'network', created_at: '2024-09-21T10:00:00Z' } } };

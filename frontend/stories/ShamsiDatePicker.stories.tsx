@@ -1,19 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { TextField } from '@mui/material';
+import ShamsiDatePicker from '../src/components/ShamsiDatePicker';
 
-const meta: Meta<any> = {
-  title: 'Components/ShamsiDatePicker',
-  component: TextField,
-};
-
+const meta: Meta<typeof ShamsiDatePicker> = { title: 'Unify/ShamsiDatePicker', component: ShamsiDatePicker };
 export default meta;
+type Story = StoryObj<typeof ShamsiDatePicker>;
 
-export const Default: StoryObj = {
-  render: () => (
-    <TextField 
-      label="تاریخ شمسی" 
-      placeholder="1403/05/15"
-      fullWidth 
-    />
-  ),
-};
+export const Valid: Story = { args: { value: '1403/08/15', onChange: () => {} } };
+export const Invalid: Story = { args: { value: '1403/13/40', onChange: () => {} } };

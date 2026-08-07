@@ -14,7 +14,7 @@ class OfflineSyncTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $response = $this->actingAs($user)->postJson('/api/offline/sync', [
+        $response = $this->actingAs($user)->postJson('/api/v1/offline/sync', [
             'items' => [
                 [
                     'type' => 'rating',

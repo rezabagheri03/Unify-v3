@@ -1,24 +1,34 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import Alert from '@mui/material/Alert';
+import api, { apiErrorMessage } from '../../api/client';
 
 export default function AnalyticsLimited() {
+  const [stats, setStats] = useState({ resources: 0, tickets: 0 });
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    Promise.all([api.get('/resources'), api.get('/tickets')])
+      .then(([r, t]) => {
+        const tickets = Array.isArray(t.data?.data) ? t.data.data : Array.isArray(t.data) ? t.data : [];
+        setStats({ resources: (r.data?.data || []).length, tickets: tickets.length });
+      })
+      .catch((err) => setError(apiErrorMessage(err)));
+  }, []);
+
   return (
-    <div style={{ padding: 24 }}>
-      <h2>آنالیتیکس محدود</h2>
-      
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-        <div style={{ background: '#e3f2fd', padding: 20, borderRadius: 8 }}>
-          <h4>کاربران فعال امروز</h4>
-          <p style={{ fontSize: 28 }}>124</p>
-        </div>
-        <div style={{ background: '#e8f5e9', padding: 20, borderRadius: 8 }}>
-          <h4>تیکت‌های جدید</h4>
-          <p style={{ fontSize: 28 }}>18</p>
-        </div>
-        <div style={{ background: '#fff3e0', padding: 20, borderRadius: 8 }}>
-          <h4>منابع آپلود شده امروز</h4>
-          <p style={{ fontSize: 28 }}>7</p>
-        </div>
-      </div>
-    </div>
+    <Box>
+      <Typography variant="h5" gutterBottom>گزارش‌های محدود</Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      <Card>
+        <CardContent>
+          <Typography variant="subtitle1">منابع: {stats.resources}</Typography>
+          <Typography variant="subtitle1">تیکت‌ها: {stats.tickets}</Typography>
+        </CardContent>
+      </Card>
+    </Box>
   );
 }

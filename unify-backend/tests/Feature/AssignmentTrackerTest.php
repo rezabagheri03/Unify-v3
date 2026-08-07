@@ -16,10 +16,10 @@ class AssignmentTrackerTest extends TestCase
         $student = User::factory()->create(['role' => 'student']);
         $spec = CourseSpecification::factory()->create();
 
-        $response = $this->actingAs($student)->postJson('/api/assignments', [
+        $response = $this->actingAs($student)->postJson('/api/v1/assignments', [
             'specification_id' => $spec->id,
             'title' => 'Homework 1',
-            'due_date_g' => now()->addWeek()
+            'due_date_shamsi' => '1403/08/15'
         ]);
 
         $response->assertStatus(201);

@@ -13,18 +13,18 @@ class PasswordHistoryTest extends TestCase
     public function test_user_cannot_reuse_recent_passwords()
     {
         $user = User::factory()->create([
-            'password_hash' => bcrypt('OldPass123!')
+            'password_hash' => \Illuminate\Support\Facades\Hash::make('OldPass123!')
         ]);
 
         // Change password
-        $this->actingAs($user)->postJson('/api/password/change', [
+        $this->actingAs($user)->postJson('/api/v1/password/change', [
             'old_password' => 'OldPass123!',
             'new_password' => 'NewPass123!',
             'new_password_confirmation' => 'NewPass123!'
         ]);
 
         // Try to reuse old password
-        $response = $this->actingAs($user)->postJson('/api/password/change', [
+        $response = $this->actingAs($user)->postJson('/api/v1/password/change', [
             'old_password' => 'NewPass123!',
             'new_password' => 'OldPass123!',
             'new_password_confirmation' => 'OldPass123!'

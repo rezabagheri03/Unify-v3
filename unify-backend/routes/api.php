@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Http\Request;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\SpecificationController;
@@ -28,6 +29,7 @@ use App\Http\Controllers\Api\BrandingController;
 use App\Http\Controllers\Api\BroadcastThrottleController;
 use App\Http\Controllers\Api\OfflineSyncController;
 use App\Http\Controllers\Api\HealthController;
+use App\Http\Controllers\Api\MonitoringController;
 
 /*
 |--------------------------------------------------------------------------
@@ -104,6 +106,10 @@ Route::prefix('v1')->group(function () {
             Route::patch('/tickets/{id}/status', [TicketController::class, 'updateStatus']);
             Route::patch('/tickets/{id}/assign', [TicketController::class, 'assign']);
         });
+
+        // Monitoring (21_MONITORING.md)
+        Route::get('/monitoring/health', [MonitoringController::class, 'health']);
+        Route::get('/monitoring/storage', [MonitoringController::class, 'storage']);
 
         // Notifications (polling)
         Route::get('/notifications/unread', [NotificationController::class, 'unread']);

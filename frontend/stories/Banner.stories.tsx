@@ -1,36 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Alert, AlertTitle } from '@mui/material';
+import Banner from '../src/components/Banner';
 
-const meta: Meta<any> = {
-  title: 'Components/Banner',
-  component: Alert,
-  tags: ['autodocs'],
-};
-
+const meta: Meta<typeof Banner> = { title: 'Unify/Banner', component: Banner };
 export default meta;
+type Story = StoryObj<typeof Banner>;
 
-export const Warning: StoryObj = {
-  args: {
-    severity: 'warning',
-    children: (
-      <>
-        <AlertTitle>هشدار</AlertTitle>
-        انتخاب واحد شما با تداخل زمانی مواجه است.
-      </>
-    ),
-  },
-};
-
-export const Success: StoryObj = {
-  args: {
-    severity: 'success',
-    children: 'انتخاب واحد با موفقیت نهایی شد.',
-  },
-};
-
-export const Error: StoryObj = {
-  args: {
-    severity: 'error',
-    children: 'خطا در برقراری ارتباط با سرور.',
-  },
-};
+export const Critical: Story = { args: { tone: 'critical', children: 'تداخل زمانی با ریاضی ۲' } };
+export const Warning: Story = { args: { tone: 'warning', children: 'پیش‌نیاز را پاس نکرده‌اید' } };
+export const Intranet: Story = { args: { tone: 'intranet' } };
+export const Honor: Story = { args: { tone: 'honor' } };
+export const Offline: Story = { args: { tone: 'offline' } };

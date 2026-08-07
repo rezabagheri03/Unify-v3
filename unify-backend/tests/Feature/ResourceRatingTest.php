@@ -16,7 +16,7 @@ class ResourceRatingTest extends TestCase
         $student = User::factory()->create(['role' => 'student']);
         $resource = Resource::factory()->create();
 
-        $response = $this->actingAs($student)->postJson("/api/resources/{$resource->id}/rating", [
+        $response = $this->actingAs($student)->postJson("/api/v1/resources/{$resource->id}/rating", [
             'rating' => 5
         ]);
 

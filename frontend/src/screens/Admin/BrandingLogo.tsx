@@ -1,57 +1,60 @@
-import React, { useState } from 'react';
-import api from '../../api/client';
+import React, { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import Button from '@mui/material/Button';
+import TextField from '@mui/material/TextField';
+import Alert from '@mui/material/Alert';
+import Snackbar from '@mui/material/Snackbar';
+import api, { apiErrorMessage } from '../../api/client';
+import ThemePreview from '../../components/ThemePreview';
 
 export default function BrandingLogo() {
-  const [logo, setLogo] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [brand, setBrand] = useState('Unify');
+  const [theme, setTheme] = useState('Unify Blue');
+  const [file, setFile] = useState<File | null>(null);
+  const [snack, setSnack] = useState('');
+  const [error, setError] = useState('');
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setLogo(file);
-      setPreview(URL.createObjectURL(file));
+  useEffect(() => {
+    api.get('/branding').then((res) => {
+      if (res.data?.brand_name) setBrand(res.data.brand_name);
+    }).catch(() => {});
+  }, []);
+
+  const saveBrand = async () => {
+    try {
+      await api.post('/admin/branding/logo', file ? fileToForm() : new FormData());
+      setSnack('برندینگ ذخیره شد');
+    } catch (err: any) {
+      setError(apiErrorMessage(err));
     }
   };
 
-  const uploadLogo = async () => {
-    if (!logo) return;
-    setUploading(true);
-
-    const formData = new FormData();
-    formData.append('logo', logo);
-
-    try {
-      await api.post('/admin/branding/logo', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      alert('لوگو با موفقیت آپلود شد');
-    } finally {
-      setUploading(false);
-    }
+  const fileToForm = () => {
+    const fd = new FormData();
+    if (file) fd.append('logo', file);
+    return fd;
   };
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>برندینگ و لوگو</h2>
-      
-      <div style={{ maxWidth: 400 }}>
-        <input type="file" accept="image/*" onChange={handleFileChange} />
-        
-        {preview && (
-          <div style={{ marginTop: 16 }}>
-            <img src={preview} alt="Preview" style={{ maxWidth: '100%', maxHeight: 150 }} />
-          </div>
-        )}
-
-        <button 
-          onClick={uploadLogo} 
-          disabled={!logo || uploading}
-          style={{ marginTop: 16, padding: '10px 20px' }}
-        >
-          {uploading ? 'در حال آپلود...' : 'آپلود لوگو'}
-        </button>
-      </div>
-    </div>
+    <Box>
+      <Typography variant="h5" gutterBottom>برندینگ (F18)</Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      <Card sx={{ mb: 2 }}>
+        <CardContent>
+          <TextField label="نام برند" value={brand} onChange={(e) => setBrand(e.target.value)} sx={{ mb: 2 }} />
+          <Box>
+            <Typography variant="body2" sx={{ mb: 1 }}>آپلود لوگو (PNG/SVG حداکثر ۲MB)</Typography>
+            <input type="file" accept=".png,.svg" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+          </Box>
+        </CardContent>
+      </Card>
+      <Typography variant="subtitle2" gutterBottom>انتخاب تم</Typography>
+      <ThemePreview active={theme} onSelect={setTheme} />
+      <Button variant="contained" sx={{ mt: 2 }} onClick={saveBrand}>ذخیره برندینگ</Button>
+      <Snackbar open={!!snack} autoHideDuration={4000} onClose={() => setSnack('')} message={snack} />
+    </Box>
   );
 }

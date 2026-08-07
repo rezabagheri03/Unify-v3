@@ -1,35 +1,17 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Card, CardContent, Typography, Chip } from '@mui/material';
+import CourseCard from '../src/components/CourseCard';
 
-const meta: Meta<any> = {
-  title: 'Components/CourseCard',
-  component: Card,
-  tags: ['autodocs'],
-};
-
+const meta: Meta<typeof CourseCard> = { title: 'Unify/CourseCard', component: CourseCard };
 export default meta;
+type Story = StoryObj<typeof CourseCard>;
 
-export const Default: StoryObj = {
-  render: () => (
-    <Card sx={{ maxWidth: 320 }}>
-      <CardContent>
-        <Typography variant="h6">برنامه‌نویسی وب</Typography>
-        <Typography color="text.secondary">دکتر رضایی</Typography>
-        <Chip label="شنبه ۸-۱۰" size="small" sx={{ mt: 1 }} />
-        <Typography variant="body2" sx={{ mt: 1 }}>۳ واحد • دانشکده کامپیوتر</Typography>
-      </CardContent>
-    </Card>
-  ),
-};
-
-export const WithExam: StoryObj = {
-  render: () => (
-    <Card sx={{ maxWidth: 320, border: '1px solid #1976D2' }}>
-      <CardContent>
-        <Typography variant="h6">هوش مصنوعی</Typography>
-        <Typography>دکتر کریمی — دوشنبه ۱۰-۱۲</Typography>
-        <Chip label="امتحان: ۱۴۰۳/۱۰/۱۵" color="warning" size="small" sx={{ mt: 1 }} />
-      </CardContent>
-    </Card>
-  ),
+export const Default: Story = {
+  args: {
+    spec: {
+      id: '1', course: { name: 'ریاضی ۲', code: 'CS102', credits: 3 },
+      professor: { first_name: 'دکتر', last_name: 'رضایی' },
+      day_of_week: 'شنبه', time_start: '08:00', time_end: '10:00',
+      location: 'کلاس ۱۰۱', shamsi_final: '1403/04/22',
+    },
+  },
 };

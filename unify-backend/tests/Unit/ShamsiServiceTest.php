@@ -10,7 +10,7 @@ class ShamsiServiceTest extends TestCase
     public function test_converts_gregorian_to_shamsi()
     {
         $shamsi = ShamsiService::toShamsi('2025-01-20');
-        $this->assertEquals('1403/10/30', $shamsi);
+        $this->assertEquals('1403/11/01', $shamsi);
     }
 
     public function test_converts_shamsi_to_gregorian()

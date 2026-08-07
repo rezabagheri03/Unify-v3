@@ -1,42 +1,42 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import Chip from '@mui/material/Chip';
+import Alert from '@mui/material/Alert';
+import api, { apiErrorMessage } from '../../api/client';
 
 export default function PrereqManager() {
-  const [prereqs, setPrereqs] = useState([
-    { id: 1, course: 'CS201', prereq: 'CS101' },
-    { id: 2, course: 'CS301', prereq: 'CS201' },
-    { id: 3, course: 'CS401', prereq: 'CS301' },
-  ]);
+  const [courses, setCourses] = useState<any[]>([]);
+  const [error, setError] = useState('');
 
-  const addPrereq = () => {
-    const newId = Math.max(...prereqs.map(p => p.id)) + 1;
-    setPrereqs([...prereqs, { id: newId, course: 'CS' + newId + '01', prereq: 'CS' + (newId - 1) + '01' }]);
-  };
+  useEffect(() => {
+    api.get('/specifications')
+      .then((res) => {
+        const map = new Map<string, any>();
+        (res.data?.data || []).forEach((s: any) => s.course && map.set(s.course.code, s.course));
+        setCourses([...map.values()]);
+      })
+      .catch((err) => setError(apiErrorMessage(err)));
+  }, []);
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>مدیریت پیش‌نیازها</h2>
-      <button onClick={addPrereq} style={{ marginBottom: 16 }}>افزودن پیش‌نیاز</button>
-
-      <table style={{ width: '100%', maxWidth: 600 }}>
-        <thead>
-          <tr style={{ background: '#f5f5f5' }}>
-            <th style={{ padding: 12, textAlign: 'right' }}>درس</th>
-            <th style={{ padding: 12, textAlign: 'right' }}>پیش‌نیاز</th>
-            <th style={{ padding: 12 }}>عملیات</th>
-          </tr>
-        </thead>
-        <tbody>
-          {prereqs.map((p, index) => (
-            <tr key={index}>
-              <td style={{ padding: 12 }}>{p.course}</td>
-              <td style={{ padding: 12 }}>{p.prereq}</td>
-              <td style={{ padding: 12 }}>
-                <button>حذف</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Box>
+      <Typography variant="h5" gutterBottom>مدیریت پیش‌نیازها</Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        پیش‌نیازها از فایل نمودار درسی (seed_curriculum) بارگذاری می‌شوند و در انتخاب واحد به‌صورت هشدار (نه مانع) نمایش داده می‌شوند.
+      </Typography>
+      {courses.map((c: any) => (
+        <Card key={c.code} sx={{ mb: 1 }}>
+          <CardContent sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="subtitle1">{c.name} ({c.code})</Typography>
+            <Chip size="small" label={`${c.credits} واحد`} variant="outlined" />
+          </CardContent>
+        </Card>
+      ))}
+      {courses.length === 0 && <Typography color="text.secondary">درسی ثبت نشده</Typography>}
+    </Box>
   );
 }

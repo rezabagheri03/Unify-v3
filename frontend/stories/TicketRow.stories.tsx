@@ -1,27 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Chip, Box, Typography } from '@mui/material';
+import TicketRow from '../src/components/TicketRow';
 
-const meta: Meta<any> = {
-  title: 'Components/TicketRow',
-  component: Box,
-};
-
+const meta: Meta<typeof TicketRow> = { title: 'Unify/TicketRow', component: TicketRow };
 export default meta;
+type Story = StoryObj<typeof TicketRow>;
 
-export const Open: StoryObj = {
-  render: () => (
-    <Box display="flex" alignItems="center" gap={2}>
-      <Typography>مشکل در انتخاب واحد</Typography>
-      <Chip label="باز" color="warning" size="small" />
-    </Box>
-  ),
-};
-
-export const Escalated: StoryObj = {
-  render: () => (
-    <Box display="flex" alignItems="center" gap={2}>
-      <Typography>عدم دسترسی به منابع</Typography>
-      <Chip label="Escalate شده (سطح ۲)" color="error" size="small" />
-    </Box>
-  ),
-};
+export const Open: Story = { args: { ticket: { id: '1', subject: 'مشکل ثبت‌نام', description: 'نمیتوانم واحد اضافه کنم', department: 'education', status: 'open', created_at: '2024-09-21T10:00:00Z' } } };

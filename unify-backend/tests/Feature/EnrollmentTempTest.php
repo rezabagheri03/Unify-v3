@@ -16,7 +16,7 @@ class EnrollmentTempTest extends TestCase
         $student = User::factory()->create(['role' => 'student']);
         $spec = CourseSpecification::factory()->create();
 
-        $response = $this->actingAs($student)->postJson('/api/enrollment/temp', [
+        $response = $this->actingAs($student)->postJson('/api/v1/enrollment/temp', [
             'specification_id' => $spec->id
         ]);
 

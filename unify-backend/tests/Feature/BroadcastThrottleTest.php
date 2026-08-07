@@ -17,14 +17,14 @@ class BroadcastThrottleTest extends TestCase
         $spec = CourseSpecification::factory()->create();
 
         // First broadcast
-        $this->actingAs($professor)->postJson('/api/messages/send', [
+        $this->actingAs($professor)->postJson('/api/v1/messages/send', [
             'specification_id' => $spec->id,
             'subject' => 'Test',
             'body' => 'Message 1'
         ]);
 
         // Second broadcast immediately
-        $response = $this->actingAs($professor)->postJson('/api/messages/send', [
+        $response = $this->actingAs($professor)->postJson('/api/v1/messages/send', [
             'specification_id' => $spec->id,
             'subject' => 'Test',
             'body' => 'Message 2'
