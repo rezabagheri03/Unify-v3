@@ -46,6 +46,8 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/login', [AuthController::class, 'login'])
         ->middleware('throttle:' . env('LOGIN_THROTTLE_MAX_ATTEMPTS', 5) . ',' . env('LOGIN_THROTTLE_DECAY_MINUTES', 15));
     Route::get('/branding', [BrandingController::class, 'publicConfig']);
+    // Health probe (21_MONITORING.md + 12_SECURITY_CHECKLIST.md: /api/v1/health)
+    Route::get('/health', [HealthController::class, 'check']);
 
     // ---- Authenticated ----
     Route::middleware('auth:sanctum')->group(function () {
