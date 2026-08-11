@@ -9,9 +9,11 @@ import Chip from '@mui/material/Chip';
 import Alert from '@mui/material/Alert';
 import Snackbar from '@mui/material/Snackbar';
 import api, { apiErrorMessage } from '../../api/client';
+import type { ResourceItem } from '../../api/types';
+import RateStars from '../../components/RateStars';
 
 export default function ResourceHubList() {
-  const [resources, setResources] = useState<any[]>([]);
+  const [resources, setResources] = useState<ResourceItem[]>([]);
   const [search, setSearch] = useState('');
   const [snack, setSnack] = useState('');
   const [error, setError] = useState('');
@@ -19,7 +21,7 @@ export default function ResourceHubList() {
   const load = async () => {
     try {
       const res = await api.get('/resources', { params: search ? { search } : {} });
-      setResources(res.data?.data || []);
+      setResources((res.data?.data as ResourceItem[]) || []);
     } catch (err: any) {
       setError(apiErrorMessage(err));
     }
@@ -52,7 +54,7 @@ export default function ResourceHubList() {
       <Typography variant="h5" gutterBottom>مرکز منابع (همیشه‌سبز)</Typography>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <TextField fullWidth label="جستجوی منبع" value={search} onChange={(e) => setSearch(e.target.value)} sx={{ mb: 2 }} />
-      {resources.map((r: any) => (
+      {resources.map((r) => (
         <Card key={r.id} sx={{ mb: 1 }}>
           <CardContent sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Box>
@@ -63,9 +65,19 @@ export default function ResourceHubList() {
                 )}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {r.course?.name} • {r.professor?.first_name} {r.professor?.last_name} • امتیاز {r.average_rating ?? '—'} ({r.rating_count ?? 0})
-                {' '}• دانلود {r.download_count ?? 0}
+                {r.course?.name} • {r.professor?.first_name} {r.professor?.last_name} • دانلود {r.download_count ?? 0}
               </Typography>
+              <RateStars
+                resourceId={r.id}
+                average={r.average_rating}
+                count={r.rating_count}
+                onMessage={setSnack}
+                onRated={(avg) =>
+                  setResources((prev) =>
+                    prev.map((x) => (x.id === r.id ? { ...x, average_rating: avg } : x))
+                  )
+                }
+              />
             </Box>
             <Box>
               <Button size="small" variant="contained" onClick={() => download(r.id)}>دانلود</Button>

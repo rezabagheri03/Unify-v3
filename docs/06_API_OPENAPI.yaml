@@ -1,0 +1,569 @@
+openapi: 3.0.3
+info:
+  title: Unify V9 - Shared Host Ready - API
+  description: |
+    API for Unify University Assistant - Pars Pack Cloud Host + Host Iran
+    Stack: Laravel 10 PHP 8.2 + MySQL + Local Filesystem + Polling + Cron + Pushe PHP
+    600 Students, No VPS, No iOS, Android APK optional
+    All dates stored Gregorian DATETIME UTC, displayed Shamsi YYYY/MM/DD via Morilog\Jalali
+    Idempotency via MySQL table IdempotencyKeys, key UUID v4 header Idempotency-Key
+    Auth via Laravel Sanctum SPA httpOnly cookie + CSRF
+    Rate limiting via Laravel throttle file cache
+  version: 9.0.0
+  contact:
+    name: Unify Team
+servers:
+  - url: https://api.unify-cs.ac.ir/api/v1
+    description: Production API on Cloud Host (api subdomain)
+  - url: http://localhost:8000/api/v1
+    description: Local dev
+security:
+  - Sanctum: []
+paths:
+  /auth/login:
+    post:
+      summary: Login with Student Number / Personnel ID + password (IT handout)
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: {type: string, example: "400123456"}
+                password: {type: string, example: "A8$k2!pL9@qW"}
+      responses:
+        '200':
+          description: Login success, Sanctum cookie set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: {$ref: '#/components/schemas/User'}
+                  must_change_password: {type: boolean}
+                  access_token: {type: string, description: "Sanctum token for API, also set as httpOnly cookie"}
+        '401': {$ref: '#/components/responses/UnauthorizedGeneric'}
+        '403':
+          description: Banned or temp expired
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: {type: string, example: "حساب شما بن شده: تقلب در انتخاب واحد"}
+                  banned_reason: {type: string}
+                  expired: {type: boolean, example: true, description: "Temp password expired 7 days"}
+        '429': {$ref: '#/components/responses/RateLimit'}
+  /onboarding:
+    post:
+      summary: Mandatory first login - set first_name/last_name + supplementary
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [first_name, last_name]
+              properties:
+                first_name: {type: string, maxLength: 100}
+                last_name: {type: string, maxLength: 100}
+                supplementary_details: {type: string, maxLength: 500, nullable: true}
+      responses:
+        '200': {description: Onboarding done, must_change_password still true until password change}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /password/change:
+    post:
+      summary: Change password - complexity min 8 upper lower number special not same last 3 not same temp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [old_password, new_password]
+              properties:
+                old_password: {type: string}
+                new_password: {type: string, minLength: 8}
+                logout_other_devices: {type: boolean, default: true}
+      responses:
+        '200': {description: Password changed, other tokens revoked if logout_other_devices true}
+        '400': {description: New same as old or in last 3}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /users/me:
+    get:
+      summary: Get current user profile
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/User'}
+  /users/me/academic-status:
+    get:
+      summary: Get declared academic status + count + abuse flag
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  academic_status_declared: {type: string, enum: [normal, conditional, gpa_a, final_semester], nullable: true}
+                  academic_status_declaration_count: {type: integer}
+                  academic_status_last_declared_at: {type: string, format: date-time, nullable: true}
+                  final_semester_abuse_flag: {type: boolean}
+                  is_honor_system_acknowledged: {type: boolean}
+    post:
+      summary: Declare academic status via honor system checkbox + acknowledge required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, acknowledged]
+              properties:
+                status: {type: string, enum: [normal, conditional, gpa_a, final_semester]}
+                acknowledged: {type: boolean, description: "I confirm self-declared, responsibility mine"}
+      responses:
+        '200': {description: Stored, count++, logged AuditLog honor_status_change}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /specifications:
+    get:
+      summary: List available specifications current semester, paginated 20, cached via Workbox 5min
+      parameters:
+        - {name: semester, in: query, schema: {type: string, default: current}}
+        - {name: search, in: query, schema: {type: string, description: "Name/Code"}}
+        - {name: day, in: query, schema: {type: string, enum: [sat, sun, mon, tue, wed, thu, fri]}}
+        - {name: page, in: query, schema: {type: integer, default: 1}}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/CourseSpecification'}}
+                  meta: {$ref: '#/components/schemas/PaginationMeta'}
+  /enrollment/temp:
+    get:
+      summary: List current user's temporary enrollments
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Enrollment'}
+    post:
+      summary: Add spec to temporary list - checks time overlap day_of_week, exam overlap, prereq warning, credit limit
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [specification_id]
+              properties:
+                specification_id: {type: string}
+      responses:
+        '201': {description: Added to temp}
+        '409':
+          description: Conflict time overlap or exam overlap or credit limit
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: {type: string, example: "تداخل زمانی با ریاضی 2 شنبه 8-10"}
+                  conflicting_specs: {type: array, items: {type: string}}
+                  reason: {type: string, enum: [time_overlap, exam_overlap, credit_limit, prereq_warning]}
+        '429': {$ref: '#/components/responses/RateLimit'}
+    delete:
+      summary: Remove from temp or clear all? Actually DELETE /enrollment/temp/{id}
+      operationId: deleteTemp
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '200': {description: Removed}
+  /enrollment/final:
+    post:
+      summary: Finalize all temp - must be online, requires academic_status_declared, credit limit enforced, version check
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Finalized, temp cleared, status finalized}
+        '400': {description: Less than min credits for Normal or exceed max even final_semester 24}
+        '403': {description: Grace period ended or not in enrolling phase}
+        '409': {description: Conflict now because spec changed after temp added - returns server state}
+  /enrollments:
+    get:
+      summary: List finalized/archived enrollments for student - Phase B weekly timetable and archive dropdown
+      parameters:
+        - {name: semester, in: query, schema: {type: string}}
+        - {name: status, in: query, schema: {type: string, enum: [finalized, archived, temporary]}}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/EnrollmentExpanded'}
+  /golden-schedule:
+    get:
+      summary: Generate top 15 golden schedules via backtracking PHP 5s timeout max 1000 combos scoring freeDays*20 -gap*10 +profBonus*15
+      parameters:
+        - {name: preferFreeDays, in: query, schema: {type: string, example: "thu,fri"}}
+        - {name: maxGap, in: query, schema: {type: integer, example: 2}}
+        - {name: preferProfessors, in: query, schema: {type: string, example: "P123,P456"}}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  suggestions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        specs: {type: array, items: {$ref: '#/components/schemas/CourseSpecification'}}
+                        credits: {type: integer}
+                        score: {type: integer}
+                        explanation: {type: string, example: "2 روز خالی، 1 ساعت گپ"}
+  /resources:
+    get:
+      summary: List evergreen resources filtered course+prof, paginated 20, sort newest/oldest/rated/downloaded
+      parameters:
+        - {name: course_id, in: query, schema: {type: string}}
+        - {name: professor_id, in: query, schema: {type: string}}
+        - {name: specification_id, in: query, schema: {type: string}}
+        - {name: sort, in: query, schema: {type: string, enum: [newest, oldest, rated, downloaded], default: newest}}
+        - {name: search, in: query, schema: {type: string}}
+        - {name: page, in: query, schema: {type: integer}}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/Resource'}}
+  /resources/{id}:
+    get:
+      summary: Get resource detail
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        '200': {content: {application/json: {schema: {$ref: '#/components/schemas/Resource'}}}}
+        '404': {description: Not found or hard deleted}
+  /resources/{id}/download:
+    get:
+      summary: Download resource - direct file /uploads/resources/... not signed S3, increments download_count, caches via Cache API
+      responses:
+        '200': {description: File stream, Content-Disposition attachment}
+        '410': {description: Old version file content hard deleted after 30d}
+  /resources/upload:
+    post:
+      summary: Upload resource - Student pending, Professor auto-approved, quota 5/day via MySQL, PDF/DOCX magic finfo max 50MB
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, title, course_id, professor_id]
+              properties:
+                file: {type: string, format: binary}
+                title: {type: string, maxLength: 255}
+                description: {type: string, maxLength: 1000}
+                course_id: {type: string}
+                professor_id: {type: string}
+                specification_id: {type: string, nullable: true}
+                notify: {type: boolean, default: false}
+      responses:
+        '201': {description: Created pending or approved}
+        '429': {description: Quota 5/day exceeded}
+  /resources/{id}/rating:
+    post:
+      summary: Rate resource 1-5 replaces old, average excludes self
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating]
+              properties:
+                rating: {type: integer, minimum: 1, maximum: 5}
+      responses:
+        '200': {description: Rated, average recalculated}
+  /resources/{id}/sticky-note:
+    get: {summary: Get own sticky note}
+    post:
+      summary: Add private sticky note max 1000 chars encrypted via Crypt::encryptString
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note: {type: string, maxLength: 1000}
+  /messages:
+    get:
+      summary: Unified inbox tabs all/unread/classes/private/system, paginated 20, search subject/body/sender
+      parameters:
+        - {name: tab, in: query, schema: {type: string, enum: [all, unread, classes, private, system], default: all}}
+        - {name: page, in: query, schema: {type: integer}}
+        - {name: search, in: query, schema: {type: string}}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/Message'}}
+  /messages/{id}:
+    get:
+      summary: Get message detail with thread children sorted asc
+      responses:
+        '200': {content: {application/json: {schema: {$ref: '#/components/schemas/MessageThread'}}}}
+  /messages/send:
+    post:
+      summary: Send message broadcast to spec or private to recipient_id or group recipient_ids array, rate limit professor broadcast 1/10min
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                recipient_id: {type: string, nullable: true}
+                recipient_ids: {type: array, items: {type: string}, description: "Group max 50 Expert, 100 Admin"}
+                specification_id: {type: string, nullable: true, description: "Broadcast to spec"}
+                subject: {type: string, maxLength: 255}
+                body: {type: string, maxLength: 2000}
+                parent_message_id: {type: string, nullable: true}
+      responses:
+        '201': {description: Sent}
+        '429': {description: Broadcast rate limit 1 per 10min per professor per spec}
+  /notifications/unread:
+    get:
+      summary: Polling primary - list unread notifications since timestamp every 15s foreground 60s background, works on intranet (HTTP)
+      parameters:
+        - {name: since, in: query, schema: {type: string, format: date-time, description: "Last poll timestamp"}}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Notification'}
+  /tickets:
+    get:
+      summary: List own tickets student, or Expert dept, Admin all, paginated
+      parameters:
+        - {name: status, in: query, schema: {type: string, enum: [open, in_progress, answered, closed]}}
+        - {name: department, in: query, schema: {type: string, enum: [education, technical, student_affairs]}}
+    post:
+      summary: Create ticket - dept required, subject max100 desc max2000 images only max3x5MB, rate limit 5/day
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [department, subject, description]
+              properties:
+                department: {type: string, enum: [education, technical, student_affairs]}
+                subject: {type: string, maxLength: 100}
+                description: {type: string, maxLength: 2000}
+                attachments: {type: array, items: {type: string, format: binary}, maxItems: 3}
+  /semesters/current:
+    get:
+      summary: Get current semester + global_state + grace_period_ends_at
+      responses:
+        '200': {content: {application/json: {schema: {$ref: '#/components/schemas/Semester'}}}}
+  /admin/semesters:
+    post:
+      summary: Admin define new semester - soft hide old specs is_active=0 enrollments finalized->archived temp hard deleted
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, start_shamsi, end_shamsi, is_current]
+              properties:
+                name: {type: string, example: "1403-2"}
+                start_shamsi: {type: string, example: "1403/07/01"}
+                end_shamsi: {type: string, example: "1404/01/31"}
+                is_current: {type: boolean}
+  /health:
+    get:
+      summary: For intranet detection - returns status ok, mode online/intranet, version
+      security: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, example: ok}
+                  mode: {type: string, enum: [online, intranet, offline]}
+                  version: {type: string}
+                  timestamp: {type: string, format: date-time}
+
+components:
+  securitySchemes:
+    Sanctum:
+      type: apiKey
+      in: cookie
+      name: laravel_session
+  schemas:
+    User:
+      type: object
+      properties:
+        id: {type: string, example: "400123456"}
+        first_name: {type: string}
+        last_name: {type: string}
+        role: {type: string, enum: [student, professor, expert, head_of_dept, admin, owner]}
+        department_id: {type: string, nullable: true}
+        academic_status_declared: {type: string, enum: [normal, conditional, gpa_a, final_semester], nullable: true}
+        is_banned: {type: boolean}
+        must_change_password: {type: boolean}
+        created_at: {type: string, format: date-time}
+    CourseSpecification:
+      type: object
+      properties:
+        id: {type: string}
+        course_id: {type: string}
+        course_name: {type: string}
+        professor_id: {type: string}
+        professor_name: {type: string}
+        day_of_week: {type: string, enum: [sat, sun, mon, tue, wed, thu, fri]}
+        time_start: {type: string, example: "08:00"}
+        time_end: {type: string, example: "10:00"}
+        location: {type: string}
+        telegram_link: {type: string, format: uri}
+        exam_date_final_g: {type: string, format: date-time, nullable: true}
+        shamsi_original_final: {type: string, nullable: true}
+        is_active: {type: boolean}
+        semester_id: {type: string}
+    Enrollment:
+      type: object
+      properties:
+        id: {type: string}
+        student_id: {type: string}
+        specification_id: {type: string}
+        semester_id: {type: string}
+        status: {type: string, enum: [temporary, finalized, archived]}
+        enrolled_at: {type: string, format: date-time}
+    EnrollmentExpanded:
+      allOf:
+        - {$ref: '#/components/schemas/Enrollment'}
+        - type: object
+          properties:
+            specification: {$ref: '#/components/schemas/CourseSpecification'}
+    Resource:
+      type: object
+      properties:
+        id: {type: string}
+        course_id: {type: string}
+        professor_id: {type: string}
+        title: {type: string}
+        description: {type: string}
+        file_size_bytes: {type: integer}
+        file_mime: {type: string}
+        shamsi_original: {type: string}
+        created_at_g: {type: string, format: date-time}
+        status: {type: string, enum: [pending, approved, rejected]}
+        version: {type: integer}
+        family_id: {type: string}
+        average_rating: {type: number}
+        rating_count: {type: integer}
+        download_count: {type: integer}
+        badge_type: {type: string, enum: [professor, expert_approved, admin_approved], nullable: true}
+        is_superseded: {type: boolean}
+    Message:
+      type: object
+      properties:
+        id: {type: string}
+        sender_id: {type: string}
+        recipient_id: {type: string, nullable: true}
+        specification_id: {type: string, nullable: true}
+        subject: {type: string}
+        body: {type: string}
+        sent_at: {type: string, format: date-time}
+        is_edited: {type: boolean}
+        is_deleted: {type: boolean}
+        parent_message_id: {type: string, nullable: true}
+        priority: {type: string, enum: [low, normal, high]}
+    MessageThread:
+      type: object
+      properties:
+        message: {$ref: '#/components/schemas/Message'}
+        children: {type: array, items: {$ref: '#/components/schemas/Message'}}
+    Notification:
+      type: object
+      properties:
+        id: {type: string}
+        type: {type: string, example: "spec_changed"}
+        title: {type: string}
+        body: {type: string}
+        data: {type: object, example: {spec_id: "spec123", course_id: "CS101"}}
+        priority: {type: string, enum: [critical, high, low]}
+        read: {type: boolean}
+        created_at: {type: string, format: date-time}
+        shamsi_formatted: {type: string}
+    Semester:
+      type: object
+      properties:
+        id: {type: string}
+        name: {type: string}
+        is_current: {type: boolean}
+        global_state: {type: string, enum: [enrolling, active, exam]}
+        start_date_g: {type: string, format: date-time}
+        end_date_g: {type: string, format: date-time}
+        grace_period_ends_at: {type: string, format: date-time, nullable: true}
+    PaginationMeta:
+      type: object
+      properties:
+        current_page: {type: integer}
+        total_pages: {type: integer}
+        total_items: {type: integer}
+  responses:
+    UnauthorizedGeneric:
+      description: Generic 401 to avoid enumeration
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: {type: string, example: "نام کاربری یا رمز اشتباه است"}
+    RateLimit:
+      description: Rate limit exceeded
+      headers:
+        Retry-After: {schema: {type: integer}}
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: {type: string, example: "تعداد درخواست زیاد - ۱۵ دقیقه صبر کنید"}
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: {type: string, example: "اعتبارسنجی ناموفق"}
+              errors: {type: object, additionalProperties: {type: array, items: {type: string}}, example: {shamsi_date: ["تاریخ شمسی نامعتبر"]}}

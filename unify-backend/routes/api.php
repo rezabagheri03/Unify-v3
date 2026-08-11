@@ -55,6 +55,8 @@ Route::prefix('v1')->group(function () {
         // Auth (with per-request logging so failures are visible)
         Route::post('/onboarding', [AuthController::class, 'onboarding'])->middleware('reqlog');
         Route::post('/password/change', [AuthController::class, 'changePassword'])->middleware('reqlog');
+        // SEC-03 fix: real logout that revokes the presenting token.
+        Route::post('/auth/logout', [AuthController::class, 'logout'])->middleware('reqlog');
         Route::get('/users/me', fn (Request $request) => $request->user())->middleware('reqlog');
 
         // Honor
@@ -141,15 +143,20 @@ Route::prefix('v1')->group(function () {
         });
 
         // Forms / NoticeBoard / FAQ / Academic Calendar
+        // SEC-02 fix (ROLES): publishing official content is a staff capability —
+        // students used to be able to POST all of these. Forms are Admin
+        // (university-level) + Expert (department-level); professors explicitly
+        // CANNOT publish forms per docs/ROLES. Notice-board additionally allows
+        // professors (their own class notices).
         Route::get('/forms', [FormController::class, 'index']);
-        Route::post('/forms', [FormController::class, 'store']);
+        Route::post('/forms', [FormController::class, 'store'])->middleware('role:expert,admin');
         Route::get('/forms/{id}/download', [FormController::class, 'download']);
         Route::get('/notice-board', [NoticeBoardController::class, 'index']);
-        Route::post('/notice-board', [NoticeBoardController::class, 'store']);
+        Route::post('/notice-board', [NoticeBoardController::class, 'store'])->middleware('role:professor,expert,admin');
         Route::get('/faqs', [FaqController::class, 'index']);
-        Route::post('/faqs', [FaqController::class, 'store']);
+        Route::post('/faqs', [FaqController::class, 'store'])->middleware('role:expert,admin');
         Route::get('/academic-calendar', [AcademicCalendarController::class, 'index']);
-        Route::post('/academic-calendar', [AcademicCalendarController::class, 'store']);
+        Route::post('/academic-calendar', [AcademicCalendarController::class, 'store'])->middleware('role:expert,admin');
 
         // ---- Admin (expert + admin) ----
         Route::middleware('role:expert,admin')->group(function () {
@@ -157,7 +164,12 @@ Route::prefix('v1')->group(function () {
             Route::post('/admin/resources/{id}/approve', [ResourceApprovalController::class, 'approve']);
             Route::post('/admin/resources/{id}/reject', [ResourceApprovalController::class, 'reject']);
             Route::post('/admin/semesters', [SemesterController::class, 'createNewSemester']);
+            // BE audit fix: the enrolling -> active transition (grace start).
+            Route::post('/admin/semesters/activate', [SemesterController::class, 'activateCurrent']);
             Route::post('/admin/branding/logo', [BrandingController::class, 'uploadLogo']);
+            // BE audit fix: these import handlers existed without routes.
+            Route::post('/admin/import/courses', [\App\Http\Controllers\Api\Excel\ImportController::class, 'importCourses']);
+            Route::post('/admin/import/specifications', [\App\Http\Controllers\Api\Excel\ImportController::class, 'importSpecifications']);
         });
 
         // ---- Owner ----
@@ -169,6 +181,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/owner/audit-logs', [AuditLogController::class, 'index']);
             Route::get('/owner/export/users', [ExportController::class, 'exportUsers']);
             Route::post('/owner/generate-envelopes', [OwnerUserController::class, 'generateEnvelopeZip']);
+            // PERF-15: single aggregate endpoint for the owner analytics screen.
+            Route::get('/owner/stats', [OwnerUserController::class, 'stats']);
         });
     });
 });

@@ -11,11 +11,14 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectManifest: {
-        swSrc: 'src/sw.ts',
-        swDest: 'dist/sw.js',
-      },
-      includeAssets: ['favicon.ico', 'logo.png', 'offline.html'],
+      // CRITICAL: without this the plugin defaults to generateSW and EMITS ITS
+      // OWN generic service worker — src/sw.ts (the SEC-06 hardened one with
+      // whitelisted runtime caching + CLEAR_API_CACHE logout wipe) would never
+      // ship. injectManifest compiles OUR sw.ts and injects the precache list.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      includeAssets: ['favicon.ico', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'offline.html'],
       manifest: {
         name: 'Unify - University Assistant',
         short_name: 'Unify',
@@ -25,8 +28,9 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         icons: [
-          { src: 'logo.png', sizes: '192x192', type: 'image/png' },
-          { src: 'logo.png', sizes: '512x512', type: 'image/png' },
+          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       devOptions: { enabled: false },

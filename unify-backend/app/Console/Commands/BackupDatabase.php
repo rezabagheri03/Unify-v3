@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Log;
 
 class BackupDatabase extends Command
 {
-    protected $signature = 'backup:database {--compress}';
+    protected $signature = 'backup:database {--compress} {--keep-days=14}';
     protected $description = 'Create a database backup with optional compression';
 
     public function handle()
@@ -45,6 +45,14 @@ class BackupDatabase extends Command
             exec("gzip -f " . escapeshellarg($path));
             $path = $compressedPath;
             $filename .= '.gz';
+        }
+
+        // Retention: drop db backups older than --keep-days (default 14).
+        $cutoff = time() - ((int) $this->option('keep-days') * 86400);
+        foreach (glob($backupDir . '/db_backup_*.sql*') ?: [] as $old) {
+            if (is_file($old) && filemtime($old) < $cutoff) {
+                @unlink($old);
+            }
         }
 
         Log::info('Database backup created', ['file' => $filename]);

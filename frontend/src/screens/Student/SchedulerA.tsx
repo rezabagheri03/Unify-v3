@@ -16,6 +16,7 @@ import FormLabel from '@mui/material/FormLabel';
 import Checkbox from '@mui/material/Checkbox';
 import api, { apiErrorMessage } from '../../api/client';
 import { useAuthStore } from '../../stores/authStore';
+import GoldenSuggest from '../../components/GoldenSuggest';
 
 const STATUS_LABELS: Record<string, string> = {
   normal: 'عادی (۱۲ تا ۲۰ واحد)',
@@ -122,6 +123,9 @@ export default function SchedulerA() {
       </Card>
 
       {error && <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
+
+      {/* Golden-schedule suggestions (F04 / TODO-027) */}
+      <GoldenSuggest specs={specs} />
 
       <TextField
         fullWidth label="جستجوی درس (نام یا کد)" value={search}

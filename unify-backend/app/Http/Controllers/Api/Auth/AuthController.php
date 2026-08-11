@@ -71,8 +71,12 @@ class AuthController extends Controller
             'time' => now()->toIso8601String(),
         ]);
 
-        // Create Sanctum token
-        $token = $user->createToken('unify-token')->plainTextToken;
+        // Create Sanctum token (SEC-03 fix: explicit expiry; config/sanctum.php
+        // `expiration` provides the second enforcement layer, and the nightly
+        // `sanctum:prune-expired` schedule clears dead tokens).
+        $newToken = $user->createToken('unify-token');
+        $newToken->accessToken->forceFill(['expires_at' => now()->addDays(7)])->save();
+        $token = $newToken->plainTextToken;
 
         // Log successful login
         \App\Models\AuditLog::create([
@@ -170,8 +174,28 @@ class AuthController extends Controller
             'created_at' => now(),
         ]);
 
+        // SEC-03 fix: a password change invalidates every OTHER session/token.
+        // The token that just proved knowledge of the old + new password keeps
+        // working, so the user is not force-logged-out mid-flow.
+        $currentTokenId = $user->currentAccessToken()?->id;
+        $user->tokens()->when($currentTokenId, fn ($q) => $q->where('id', '!=', $currentTokenId))->delete();
+
         Log::channel('auth')->info('PASSWORD_CHANGE_OK', ['user_id' => $user->id, 'time' => now()->toIso8601String()]);
 
         return response()->json(['message' => 'رمز عبور با موفقیت تغییر کرد']);
+    }
+
+    /**
+     * Logout (SEC-03 fix): revokes the token that made this request.
+     * There is intentionally no client-side-only "fake logout" anymore.
+     */
+    public function logout(Request $request)
+    {
+        $user = $request->user();
+        $user->currentAccessToken()?->delete();
+
+        Log::channel('auth')->info('LOGOUT', ['user_id' => $user->id, 'time' => now()->toIso8601String()]);
+
+        return response()->json(['message' => 'خروج انجام شد']);
     }
 }

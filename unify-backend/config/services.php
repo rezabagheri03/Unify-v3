@@ -42,6 +42,10 @@ return [
     'pushe' => [
         'api_key' => env('PUSHE_API_KEY'),
         'app_id' => env('PUSHE_APP_ID'),
+        // TODO-031/D-006: push delivery is wired but OFF unless explicitly
+        // enabled after the Pushe account + device-token flow are verified
+        // against the real app_ids. Prevents a silently-dead integration.
+        'enabled' => env('PUSHE_ENABLED', false),
     ],
 
     /*
@@ -52,6 +56,9 @@ return [
     'kavenegar' => [
         'api_key' => env('KAVENEGAR_API_KEY'),
         'sender' => env('KAVENEGAR_SENDER', '10004346'),
+        // D-006: SMS stays disabled until an actual trigger flow (e.g. staff
+        // credential delivery) is approved by product — no silent dead code.
+        'enabled' => env('KAVENEGAR_ENABLED', false),
     ],
 
 ];

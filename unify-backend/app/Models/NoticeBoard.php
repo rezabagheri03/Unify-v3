@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class NoticeBoard extends Model
 {
+    
+
     protected $table = 'notice_boards';
 
     protected $keyType = 'string';

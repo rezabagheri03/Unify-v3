@@ -17,7 +17,7 @@ export async function syncOfflineQueue() {
     } catch (e) {
       await SyncQueue.update(item.id, { 
         status: 'failed', 
-        last_error: e.message 
+        last_error: e instanceof Error ? e.message : String(e),
       });
     }
   }
@@ -25,8 +25,13 @@ export async function syncOfflineQueue() {
   await SyncQueue.clearSynced();
 }
 
-// Auto sync every 2 minutes when online
+// Auto sync: immediately when connectivity returns, plus a 2-minute safety net.
+// The interval now short-circuits on an empty queue (one localStorage read) so
+// idle sessions are not woken for nothing (PERF-14).
 if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    syncOfflineQueue();
+  });
   setInterval(() => {
     if (navigator.onLine) {
       syncOfflineQueue();

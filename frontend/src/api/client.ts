@@ -1,6 +1,7 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { storageGet, storageDel } from '../db/safeStorage';
 import { getAuthTokenSync, useAuthStore } from '../stores/authStore';
+import type { ApiErrorBody } from './types';
 
 /**
  * Unify V9 API client — versioned API per 23_API_VERSIONING.md (/api/v1).
@@ -75,12 +76,13 @@ api.interceptors.response.use(
 );
 
 /** Extract the documented Persian error shape: { message, errors, code, retry_after } */
-export function apiErrorMessage(err: any, fallback = 'خطای ناشناخته'): string {
+export function apiErrorMessage(err: unknown, fallback = 'خطای ناشناخته'): string {
+  const axErr = err as AxiosError<ApiErrorBody>;
   // axios network-level failure (server down / no connection)
-  if (err && !err.response && err.request) {
+  if (axErr && !axErr.response && axErr.request) {
     return 'اتصال به سرور برقرار نیست. لطفاً چند لحظه بعد دوباره تلاش کنید.';
   }
-  return err?.response?.data?.message || err?.message || fallback;
+  return axErr?.response?.data?.message || axErr?.message || fallback;
 }
 
 export default api;

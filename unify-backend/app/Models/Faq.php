@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Faq extends Model
 {
+    
+
     protected $table = 'faqs';
 
     protected $keyType = 'string';

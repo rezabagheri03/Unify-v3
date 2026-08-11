@@ -38,6 +38,11 @@ export const SyncQueue = {
     const filtered = queue.filter((i: any) => i.status !== 'synced');
     await storageSet('syncQueue', JSON.stringify(filtered));
   },
+
+  /** Wipe regardless of status — used on logout (shared-device hygiene). */
+  async clearAll() {
+    await storageSet('syncQueue', JSON.stringify([]));
+  },
 };
 
 export const FileCache = {

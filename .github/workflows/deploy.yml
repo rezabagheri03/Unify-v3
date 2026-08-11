@@ -1,4 +1,18 @@
-name: Production Deployment - Hardened v2
+name: Production Deployment - Hardened v3
+
+# SINGLE production pipeline (SEC-07/TODO-003 consolidation):
+#  - Key-authenticated SSH only (no plaintext FTP, no sshpass passwords,
+#    no StrictHostKeyChecking=no).
+#  - Host key is verified against SSH_HOST_KEY_FINGERPRINT.
+#  - Build once -> stage -> atomic swap -> migrate -> cache -> health check.
+#  - Rollback restores the previous release on failure.
+#
+# Required repo secrets:
+#   SSH_HOST                 e.g. unify-cs.ac.ir
+#   SSH_USER                 cPanel user with SSH access
+#   SSH_PRIVATE_KEY          ed25519/rsa private key for that user (deploy-only key)
+#   SSH_HOST_KEY_FINGERPRINT SHA256 fingerprint of the host key (from cPanel/SSH)
+# Legacy secrets FTP_PASSWORD / reusing the same password for FTP+SSH are RETIRED.
 
 on:
   workflow_dispatch:
@@ -6,11 +20,10 @@ on:
     branches: [ main ]
 
 env:
-  DEPLOY_PATH: /home/${{ secrets.FTP_USER }}/unify-backend
-  FRONTEND_PATH: /home/${{ secrets.FTP_USER }}/public_html
-  STAGING_PATH: /home/${{ secrets.FTP_USER }}/staging
-  BACKUP_PATH: /home/${{ secrets.FTP_USER }}/backups
-  LIVE_SYMLINK: /home/${{ secrets.FTP_USER }}/live
+  DEPLOY_PATH: /home/${{ secrets.SSH_USER }}/unify-backend
+  FRONTEND_PATH: /home/${{ secrets.SSH_USER }}/public_html
+  STAGING_PATH: /home/${{ secrets.SSH_USER }}/staging
+  RELEASES_PATH: /home/${{ secrets.SSH_USER }}/releases
 
 jobs:
   build:
@@ -29,7 +42,7 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Backend Dependencies
+      - name: Install Backend Dependencies (optimized, no-dev)
         run: |
           cd unify-backend
           composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader
@@ -37,16 +50,18 @@ jobs:
       - name: Build Frontend
         run: |
           cd frontend
-          npm ci
+          npm ci --legacy-peer-deps
           npm run build
 
-      - name: Upload Build Artifacts
+      - name: Package Release Tarball
+        run: |
+          tar -czf release.tar.gz unify-backend frontend/dist
+
+      - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: build-artifacts
-          path: |
-            unify-backend/
-            frontend/dist/
+          name: release-tarball
+          path: release.tar.gz
 
   deploy:
     needs: build
@@ -58,101 +73,113 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Build Artifacts
+      - name: Download Release Tarball
         uses: actions/download-artifact@v4
         with:
-          name: build-artifacts
+          name: release-tarball
 
-      - name: Create Timestamped Backup
-        run: |
-          BACKUP_NAME=$(date +%Y%m%d_%H%M%S)
-          sshpass -p ${{ secrets.FTP_PASSWORD }} ssh -o StrictHostKeyChecking=no ${{ secrets.FTP_USER }}@${{ secrets.FTP_HOST }} "
-            mkdir -p ${{ env.BACKUP_PATH }}/\$BACKUP_NAME &&
+      - name: Upload Release to Staging (SSH key auth)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          fingerprint: ${{ secrets.SSH_HOST_KEY_FINGERPRINT }}
+          source: "release.tar.gz"
+          target: ${{ env.STAGING_PATH }}/
+          strip_components: 0
+
+      - name: Backup, Stage, Atomic Swap, Migrate, Cache (SSH key auth)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          fingerprint: ${{ secrets.SSH_HOST_KEY_FINGERPRINT }}
+          script: |
+            set -e
+            RELEASE=$(date +%Y%m%d_%H%M%S)
+            mkdir -p ${{ env.RELEASES_PATH }}/$RELEASE
+
+            # Snapshot current live tree as the instant-rollback release
             if [ -d ${{ env.DEPLOY_PATH }} ]; then
-              cp -r ${{ env.DEPLOY_PATH }} ${{ env.BACKUP_PATH }}/\$BACKUP_NAME/backend || true
+              cp -r ${{ env.DEPLOY_PATH }} ${{ env.RELEASES_PATH }}/$RELEASE/backend.old || true
             fi
             if [ -d ${{ env.FRONTEND_PATH }} ]; then
-              cp -r ${{ env.FRONTEND_PATH }} ${{ env.BACKUP_PATH }}/\$BACKUP_NAME/frontend || true
+              cp -r ${{ env.FRONTEND_PATH }} ${{ env.RELEASES_PATH }}/$RELEASE/frontend.old || true
             fi
-          "
 
-      - name: Deploy Backend to Staging
-        uses: sebastianpopp/ftp-action@releases/v4
-        with:
-          host: ${{ secrets.FTP_HOST }}
-          user: ${{ secrets.FTP_USER }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          localDir: "unify-backend"
-          remoteDir: ${{ env.STAGING_PATH }}
-          options: "--delete --exclude .env --exclude vendor --exclude storage/logs"
+            # Unpack staged payload
+            rm -rf ${{ env.STAGING_PATH }}/payload
+            mkdir -p ${{ env.STAGING_PATH }}/payload
+            tar -xzf ${{ env.STAGING_PATH }}/release.tar.gz -C ${{ env.STAGING_PATH }}/payload
 
-      - name: Run Migrations & Cache on Staging
-        run: |
-          sshpass -p ${{ secrets.FTP_PASSWORD }} ssh -o StrictHostKeyChecking=no ${{ secrets.FTP_USER }}@${{ secrets.FTP_HOST }} "
-            cd ${{ env.STAGING_PATH }} &&
-            php artisan migrate --force &&
-            php artisan config:cache &&
-            php artisan route:cache &&
-            php artisan view:cache
-          "
+            # Preserve live-only state across releases
+            if [ -f ${{ env.DEPLOY_PATH }}/.env ]; then
+              cp ${{ env.DEPLOY_PATH }}/.env ${{ env.STAGING_PATH }}/payload/unify-backend/.env
+            fi
+            if [ -d ${{ env.DEPLOY_PATH }}/storage ]; then
+              rm -rf ${{ env.STAGING_PATH }}/payload/unify-backend/storage
+              cp -r ${{ env.DEPLOY_PATH }}/storage ${{ env.STAGING_PATH }}/payload/unify-backend/storage
+            fi
 
-      - name: Atomic Swap (Backend)
-        run: |
-          sshpass -p ${{ secrets.FTP_PASSWORD }} ssh -o StrictHostKeyChecking=no ${{ secrets.FTP_USER }}@${{ secrets.FTP_HOST }} "
-            # Remove previous old version
+            # Atomic swap (backend), then frontend swap
             rm -rf ${{ env.DEPLOY_PATH }}.old || true
-            
-            # Move current live to .old
-            if [ -d ${{ env.DEPLOY_PATH }} ]; then
-              mv ${{ env.DEPLOY_PATH }} ${{ env.DEPLOY_PATH }}.old
-            fi
-            
-            # Move staging to live
-            mv ${{ env.STAGING_PATH }} ${{ env.DEPLOY_PATH }}
-          "
+            if [ -d ${{ env.DEPLOY_PATH }} ]; then mv ${{ env.DEPLOY_PATH }} ${{ env.DEPLOY_PATH }}.old; fi
+            mv ${{ env.STAGING_PATH }}/payload/unify-backend ${{ env.DEPLOY_PATH }}
 
-      - name: Deploy Frontend
-        uses: sebastianpopp/ftp-action@releases/v4
-        with:
-          host: ${{ secrets.FTP_HOST }}
-          user: ${{ secrets.FTP_USER }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          localDir: "frontend/dist"
-          remoteDir: ${{ env.FRONTEND_PATH }}
-          options: "--delete"
+            rm -rf ${{ env.FRONTEND_PATH }}.old || true
+            if [ -d ${{ env.FRONTEND_PATH }} ]; then mv ${{ env.FRONTEND_PATH }} ${{ env.FRONTEND_PATH }}.old; fi
+            mkdir -p ${{ env.FRONTEND_PATH }}
+            cp -r ${{ env.STAGING_PATH }}/payload/frontend/dist/. ${{ env.FRONTEND_PATH }}/
+            # The server's own .htaccess lives one level up / is preserved via .old
+            if [ -f ${{ env.FRONTEND_PATH }}.old/.htaccess ]; then cp ${{ env.FRONTEND_PATH }}.old/.htaccess ${{ env.FRONTEND_PATH }}/.htaccess; fi
+
+            # Migrate AFTER the swap (code and schema can never diverge on the
+            # live path; migrations must stay backward-compatible by policy)
+            cd ${{ env.DEPLOY_PATH }}
+            php artisan migrate --force
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
 
       - name: Post-Deployment Health Check
         run: |
           sleep 10
-          curl -f --max-time 10 https://api.unify-cs.ac.ir/api/health || echo "Health check warning"
+          curl -f --max-time 10 https://api.unify-cs.ac.ir/api/health
 
-      - name: Rollback on Failure
+      - name: Rollback on Failure (restore previous release)
         if: failure()
-        run: |
-          echo "Deployment failed. Initiating rollback..."
-          sshpass -p ${{ secrets.FTP_PASSWORD }} ssh -o StrictHostKeyChecking=no ${{ secrets.FTP_USER }}@${{ secrets.FTP_HOST }} "
-            LATEST_BACKUP=\$(ls -t ${{ env.BACKUP_PATH }} | head -1)
-            if [ -n \"\$LATEST_BACKUP\" ]; then
-              echo \"Restoring from backup: \$LATEST_BACKUP\"
-              rm -rf ${{ env.DEPLOY_PATH }} || true
-              if [ -d ${{ env.BACKUP_PATH }}/\$LATEST_BACKUP/backend ]; then
-                cp -r ${{ env.BACKUP_PATH }}/\$LATEST_BACKUP/backend ${{ env.DEPLOY_PATH }}
-              fi
-              if [ -d ${{ env.BACKUP_PATH }}/\$LATEST_BACKUP/frontend ]; then
-                rm -rf ${{ env.FRONTEND_PATH }} || true
-                cp -r ${{ env.BACKUP_PATH }}/\$LATEST_BACKUP/frontend ${{ env.FRONTEND_PATH }}
-              fi
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          fingerprint: ${{ secrets.SSH_HOST_KEY_FINGERPRINT }}
+          script: |
+            set -e
+            if [ -d ${{ env.DEPLOY_PATH }}.old ]; then
+              rm -rf ${{ env.DEPLOY_PATH }}
+              mv ${{ env.DEPLOY_PATH }}.old ${{ env.DEPLOY_PATH }}
             fi
-          "
+            if [ -d ${{ env.FRONTEND_PATH }}.old ]; then
+              rm -rf ${{ env.FRONTEND_PATH }}
+              mv ${{ env.FRONTEND_PATH }}.old ${{ env.FRONTEND_PATH }}
+            fi
 
   cleanup:
     needs: deploy
     runs-on: ubuntu-latest
     if: always()
     steps:
-      - name: Cleanup Old Backups (keep last 5)
-        run: |
-          sshpass -p ${{ secrets.FTP_PASSWORD }} ssh -o StrictHostKeyChecking=no ${{ secrets.FTP_USER }}@${{ secrets.FTP_HOST }} "
-            cd ${{ env.BACKUP_PATH }} &&
-            ls -t | tail -n +6 | xargs -r rm -rf
-          "
+      - name: Prune Old Releases (keep last 5)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          fingerprint: ${{ secrets.SSH_HOST_KEY_FINGERPRINT }}
+          script: |
+            if [ -d ${{ env.RELEASES_PATH }} ]; then
+              cd ${{ env.RELEASES_PATH }} && ls -t | tail -n +6 | xargs -r rm -rf
+            fi

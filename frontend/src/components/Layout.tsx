@@ -13,6 +13,9 @@ import Badge from '@mui/material/Badge';
 import IconButton from '@mui/material/IconButton';
 import Chip from '@mui/material/Chip';
 import LogoutIcon from '@mui/icons-material/Logout';
+import MenuIcon from '@mui/icons-material/Menu';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 import { useAuthStore } from '../stores/authStore';
 import { useNotificationsPolling } from '../api/polling';
 import { useServerStatus } from '../api/serverStatus';
@@ -83,6 +86,13 @@ export default function Layout() {
   const unread = useNotificationsPolling();
   const serverStatus = useServerStatus();
 
+  // TODO-026 fix: the old drawer was a permanent 240px strip on every screen,
+  // including phones. Below `md` it becomes a temporary overlay drawer opened
+  // from a hamburger button.
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [mobileOpen, setMobileOpen] = React.useState(false);
+
   const role = (user?.role as keyof typeof NAV) || 'student';
   const items = NAV[role] || NAV.student;
 
@@ -95,6 +105,11 @@ export default function Layout() {
     <Box sx={{ display: 'flex' }}>
       <AppBar position="fixed" sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
         <Toolbar>
+          {isMobile && (
+            <IconButton color="inherit" edge="start" aria-label="منو" onClick={() => setMobileOpen(true)}>
+              <MenuIcon />
+            </IconButton>
+          )}
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Unify
           </Typography>
@@ -110,14 +125,17 @@ export default function Layout() {
         </Toolbar>
       </AppBar>
       <Drawer
-        variant="permanent"
+        variant={isMobile ? 'temporary' : 'permanent'}
+        open={isMobile ? mobileOpen : true}
+        onClose={() => setMobileOpen(false)}
+        ModalProps={{ keepMounted: true }}
         sx={{
           width: 240,
           flexShrink: 0,
           '& .MuiDrawer-paper': { width: 240, boxSizing: 'border-box', mt: 8 },
         }}
       >
-        <List>
+        <List onClick={() => isMobile && setMobileOpen(false)}>
           {items.map((item) => (
             <ListItem key={item.to} disablePadding>
               <ListItemButton component={RouterLink} to={item.to}>

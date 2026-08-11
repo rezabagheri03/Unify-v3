@@ -56,11 +56,16 @@ return new class extends Migration
 
         // FIX M10: notifications type as ENUM (raw for safety) - MySQL only,
         // SQLite uses the plain string column from 000011 (local verification/tests).
+        // The list MUST contain every value the app inserts (MySQL strict mode
+        // otherwise aborts the INSERT — the daily grace/calendar crons hit this).
+        // Kept in sync with 2026_08_11_000001_fix_notifications_type_values.
         if (DB::getDriverName() === 'mysql') {
             DB::statement("ALTER TABLE notifications MODIFY COLUMN type ENUM(
                 'spec_changed','resource_new','ticket_answered','ticket_escalated',
                 'registration_open_warning','registration_close_warning','exam_period_start',
-                'assignment_reminder','assignment_graded','notice_high','general'
+                'assignment_reminder','assignment_graded','notice_high','general',
+                'grace_ended','calendar_warning',
+                'registration_open','registration_close','semester_start'
             ) NOT NULL");
         }
     }

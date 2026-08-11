@@ -4,11 +4,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Resource extends Model
 {
-    use SoftDeletes, HasFactory;
+    use HasFactory;
 
     protected $keyType = 'string';
     public $incrementing = false;
@@ -30,6 +29,13 @@ class Resource extends Model
         'created_at_g' => 'datetime',
         'last_downloaded_at' => 'datetime',
         'scheduled_hard_delete_at' => 'datetime',
+    ];
+
+    // SEC-05 fix: storage paths are internal implementation details — files are
+    // only reachable through the authorized download endpoint, never via URLs
+    // handed to clients.
+    protected $hidden = [
+        'file_path', 'temp_path',
     ];
 
     public function course()

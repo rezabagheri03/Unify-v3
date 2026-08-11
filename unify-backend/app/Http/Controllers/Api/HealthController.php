@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class HealthController extends Controller
 {
@@ -22,17 +23,20 @@ class HealthController extends Controller
 
     private function detectIntranet(): bool
     {
-        // Simple detection: try to reach google.com
-        try {
-            $ch = curl_init('https://www.google.com');
-            curl_setopt($ch, CURLOPT_NOBODY, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 3);
-            curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-            return $httpCode !== 200;
-        } catch (\Exception $e) {
-            return true; // Assume intranet if error
-        }
+        // PERF-03 fix: the egress probe is cached for 60s instead of holding a
+        // PHP worker on a live 3s-timeout curl for EVERY health request.
+        return (bool) Cache::remember('health:intranet_mode', 60, function () {
+            try {
+                $ch = curl_init('https://www.google.com');
+                curl_setopt($ch, CURLOPT_NOBODY, true);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+                curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+                return $httpCode !== 200;
+            } catch (\Exception $e) {
+                return true; // Assume intranet if error
+            }
+        });
     }
 }

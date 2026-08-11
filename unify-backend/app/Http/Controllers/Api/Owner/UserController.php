@@ -33,10 +33,35 @@ class UserController extends Controller
     {
         set_time_limit(600);
 
-        $users = User::where('role', 'student')
-            ->where('must_change_password', true)
-            ->take(600)
-            ->get();
+        // TODO-017: imported staff previously received unknown random passwords
+        // because envelopes were student-only. The owner may now choose the
+        // audience explicitly; the safe default stays students-only and the
+        // owner role is always excluded from handouts.
+        // TODO-024: limit/offset/department_id let the UI generate the ZIP in
+        // bounded batches instead of one 600-PDF mega-request.
+        $request->validate([
+            'scope' => 'nullable|in:students,staff,all',
+            'limit' => 'nullable|integer|min:1|max:600',
+            'offset' => 'nullable|integer|min:0',
+            'department_id' => 'nullable|string|max:32',
+        ]);
+        $scope = $request->get('scope', 'students');
+
+        $query = User::where('must_change_password', true)
+            ->where('role', '!=', 'owner')
+            ->orderBy('id');
+        if ($scope === 'students') {
+            $query->where('role', 'student');
+        } elseif ($scope === 'staff') {
+            $query->whereIn('role', ['professor', 'expert', 'head_of_dept', 'admin']);
+        }
+        if ($request->filled('department_id')) {
+            $query->where('department_id', $request->department_id);
+        }
+        if ($request->filled('offset')) {
+            $query->skip((int) $request->offset);
+        }
+        $users = $query->take((int) ($request->get('limit', 600)))->get();
 
         if ($users->isEmpty()) {
             return response()->json(['message' => 'دانشجویی با رمز موقت در انتظار یافت نشد', 'code' => 'NO_ENVELOPES'], 404);
@@ -91,6 +116,9 @@ class UserController extends Controller
             'temporary_password_expires_at' => now()->addDays(7),
         ]);
 
+        // SEC-03 fix: a reset instantly kills all existing sessions/tokens.
+        $user->tokens()->delete();
+
         $qr = QrCode::size(180)->generate($user->id . '|' . $tempPassword);
         $pdf = Pdf::loadView('envelopes.it-handout', [
             'user' => $user,
@@ -119,6 +147,9 @@ class UserController extends Controller
             'banned_by' => $request->user()->id,
         ]);
 
+        // SEC-03 fix: banning instantly kills all existing sessions/tokens.
+        $user->tokens()->delete();
+
         return response()->json(['message' => 'کاربر بن شد', 'user' => $user->only(['id', 'is_banned', 'banned_reason'])]);
     }
 
@@ -132,6 +163,33 @@ class UserController extends Controller
             'banned_by' => null,
         ]);
         return response()->json(['message' => 'رفع بن انجام شد']);
+    }
+
+    /**
+     * Owner analytics (PERF-15 fix): one aggregate endpoint instead of the
+     * dashboard pulling the full users XLSX as text plus two paginated lists.
+     */
+    public function stats(Request $request)
+    {
+        $byRole = User::query()
+            ->selectRaw('role, COUNT(*) as c')
+            ->groupBy('role')
+            ->pluck('c', 'role');
+
+        $semester = \App\Models\Semester::where('is_current', true)->first();
+
+        return response()->json([
+            'users_by_role' => $byRole,
+            'users_total' => $byRole->sum(),
+            'users_banned' => User::where('is_banned', true)->count(),
+            'users_pending_password' => User::where('must_change_password', true)->count(),
+            'resources_pending' => \App\Models\Resource::where('status', 'pending')->count(),
+            'resources_approved' => \App\Models\Resource::where('status', 'approved')->count(),
+            'tickets_open' => \App\Models\Ticket::where('status', '!=', 'closed')->count(),
+            'tickets_escalated' => \App\Models\Ticket::where('is_escalated', true)->count(),
+            'storage_used_bytes' => (int) (\App\Models\SystemConfig::where('key', 'storage_used_bytes')->value('value') ?? 0),
+            'current_semester' => $semester?->id,
+        ]);
     }
 
     /** 12-char temp password with upper, lower, digit, special (F01). */

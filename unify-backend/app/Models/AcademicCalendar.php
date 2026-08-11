@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AcademicCalendar extends Model
 {
+    
+
     protected $table = 'academic_calendars';
 
     protected $keyType = 'string';

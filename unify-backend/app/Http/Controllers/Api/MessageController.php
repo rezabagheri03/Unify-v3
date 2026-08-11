@@ -54,7 +54,8 @@ class MessageController extends Controller
                 break;
         }
 
-        $messages = $query->with(['sender', 'specification.course'])
+        // SEC-04 fix: trim sender to non-PII columns (mobile/email never ship).
+        $messages = $query->with(['sender:' . \App\Models\User::PUBLIC_COLS, 'specification.course'])
             ->orderBy('sent_at', 'desc')
             ->paginate(20);
 
@@ -71,7 +72,7 @@ class MessageController extends Controller
     public function show(Request $request, $id)
     {
         $user = $request->user();
-        $message = Message::with(['sender', 'specification.course', 'replies.sender'])
+        $message = Message::with(['sender:' . \App\Models\User::PUBLIC_COLS, 'specification.course', 'replies.sender:' . \App\Models\User::PUBLIC_COLS])
             ->findOrFail($id);
 
         // Authorization: recipient, sender, or enrolled in broadcast spec
@@ -95,12 +96,32 @@ class MessageController extends Controller
             'body' => 'required|string|max:2000',
             'specification_id' => 'nullable|exists:course_specifications,id',
             'recipient_id' => 'nullable|exists:users,id',
+            // SEC-02 fix: these were accepted unconditionally and stored raw.
+            'priority' => 'nullable|in:low,normal,high',
+            'parent_message_id' => 'nullable|exists:messages,id',
         ]);
 
         $body = InputSanitizer::clean($request->body, 2000);
         $subject = InputSanitizer::clean($request->subject, 255);
 
         $isBroadcast = $request->filled('specification_id') && ! $request->filled('recipient_id');
+
+        // SEC-02 fix (F07): class broadcasts are a staff capability. Students
+        // and heads-of-dept may only send direct messages.
+        if ($isBroadcast && ! in_array($user->role, ['professor', 'expert', 'admin', 'owner'])) {
+            return response()->json(['message' => 'پخش پیام به کلاس فقط برای اساتید و کارشناسان مجاز است', 'code' => 'FORBIDDEN'], 403);
+        }
+
+        // SEC-02 fix: a professor may only broadcast to a class they actually
+        // teach; expert/admin/owner act in an official cross-class capacity.
+        if ($isBroadcast && $user->role === 'professor') {
+            $ownsSpec = \App\Models\CourseSpecification::where('id', $request->specification_id)
+                ->where('professor_id', $user->id)
+                ->exists();
+            if (! $ownsSpec) {
+                return response()->json(['message' => 'فقط برای کلاس‌های خودتان می‌توانید پیام همگانی بفرستید', 'code' => 'FORBIDDEN'], 403);
+            }
+        }
 
         // Broadcast throttle: 1 per 10 min per professor per spec (F07)
         if ($isBroadcast) {
@@ -148,9 +169,18 @@ class MessageController extends Controller
             BroadcastThrottle::where('specification_id', $request->specification_id)
                 ->where('professor_id', $user->id)
                 ->update(['last_sent_at' => now()]);
+
+            // D-006: push to the class on broadcast, gated by services.pushe.enabled.
+            if (config('services.pushe.enabled')) {
+                $targetIds = Enrollment::where('specification_id', $request->specification_id)
+                    ->where('status', 'finalized')
+                    ->pluck('student_id')
+                    ->all();
+                (new \App\Services\PusheService())->send($targetIds, $subject, Str::limit($body, 120));
+            }
         }
 
-        return response()->json($message->load('sender'), 201);
+        return response()->json($message->load('sender:' . \App\Models\User::PUBLIC_COLS), 201);
     }
 
     /** Edit: only sender, sets is_edited (F07). */

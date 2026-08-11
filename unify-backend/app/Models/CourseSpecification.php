@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 class CourseSpecification extends Model
 {
     use HasFactory;
+    
     protected $keyType = 'string';
     public $incrementing = false;
 

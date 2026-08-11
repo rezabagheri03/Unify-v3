@@ -19,7 +19,11 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class ImportController extends Controller
 {
-    private const MAX_ROWS = 2000;
+    // TODO-020/D-001: the import scale of this product is one intake
+    // (~600 students). Capping at the scale keeps the synchronous-bounded
+    // design honest: worst case ≈ 600 reduced-profile hashes + 600 inserts
+    // inside one request budget, with set_time_limit as the outer guard.
+    private const MAX_ROWS = 600;
 
     private const ROLE_MAP = [
         'دانشجو' => 'student', 'student' => 'student',
@@ -32,6 +36,8 @@ class ImportController extends Controller
 
     public function importUsers(Request $request)
     {
+        @set_time_limit(120); // TODO-020: bounded synchronous import (D-001)
+
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls|max:5120',
         ]);
@@ -44,7 +50,7 @@ class ImportController extends Controller
             return response()->json(['message' => 'فایل خالی است', 'code' => 'EMPTY_FILE'], 422);
         }
         if (count($rows) - 1 > self::MAX_ROWS) {
-            return response()->json(['message' => 'حداکثر ۲۰۰۰ ردیف مجاز است', 'code' => 'ROW_LIMIT'], 422);
+            return response()->json(['message' => 'حداکثر ۶۰۰ ردیف در هر فایل مجاز است؛ فایل‌های بزرگ‌تر را تقسیم کنید', 'code' => 'ROW_LIMIT'], 422);
         }
 
         // Validate header row (row 1) — exact-match mapping (Persian or English)
@@ -67,13 +73,28 @@ class ImportController extends Controller
         $errors = [];
         $created = 0;
         $seenIds = [];
+        // TODO-020: two-pass import. Pass 1 validates WITHOUT writing or
+        // hashing, so a doomed file costs milliseconds and never burns the
+        // shared-host CPU budget on password hashes that rollback would
+        // discard. Pass 2 (below) only runs for fully-clean files.
+        $validated = [];
 
-        DB::beginTransaction();
-        try {
-            foreach (array_slice($rows, 1) as $i => $row) {
-                $rowNo = $i + 2;
-                $row = array_pad($row, 6, null);
-                [$id, $first, $last, $roleFa, $deptId, $statusFa] = $row;
+        // PERF-04 fix: resolve pre-existing user ids and valid departments with
+        // 2 queries TOTAL instead of 2 EXISTS queries per row (up to 2000 rows).
+        $candidateIds = [];
+        $deptIds = [];
+        foreach (array_slice($rows, 1) as $row) {
+            $row = array_pad($row, 6, null);
+            $candidateIds[] = trim((string) $row[0]);
+            $deptIds[] = trim((string) $row[4]);
+        }
+        $existingIds = User::whereIn('id', array_filter($candidateIds))->pluck('id')->flip();
+        $validDeptIds = Department::whereIn('id', array_filter(array_unique($deptIds)))->pluck('id')->flip();
+
+        foreach (array_slice($rows, 1) as $i => $row) {
+            $rowNo = $i + 2;
+            $row = array_pad($row, 6, null);
+            [$id, $first, $last, $roleFa, $deptId, $statusFa] = $row;
 
                 $id = trim((string) $id);
                 $role = self::ROLE_MAP[trim((string) $roleFa)] ?? null;
@@ -86,7 +107,7 @@ class ImportController extends Controller
                     $errors[] = ['row' => $rowNo, 'error' => 'شناسه تکراری در فایل', 'data' => $row];
                     continue;
                 }
-                if (User::where('id', $id)->exists()) {
+                if ($existingIds->has($id)) {
                     $errors[] = ['row' => $rowNo, 'error' => "شناسه {$id} قبلا وجود دارد", 'data' => $row];
                     continue;
                 }
@@ -94,7 +115,7 @@ class ImportController extends Controller
                     $errors[] = ['row' => $rowNo, 'error' => "نقش نامعتبر: {$roleFa}", 'data' => $row];
                     continue;
                 }
-                if (! Department::where('id', $deptId)->exists()) {
+                if (! $validDeptIds->has((string) $deptId)) {
                     $errors[] = ['row' => $rowNo, 'error' => "دانشکده نامعتبر: {$deptId}", 'data' => $row];
                     continue;
                 }
@@ -103,25 +124,36 @@ class ImportController extends Controller
                     continue;
                 }
 
-                $seenIds[$id] = true;
+            $seenIds[$id] = true;
+            $validated[] = compact('id', 'first', 'last', 'role', 'deptId', 'statusFa');
+        }
+
+        if (! empty($errors)) {
+            return $this->generateErrorReport($errors);
+        }
+
+        // Pass 2: file is fully clean — now pay the hashing cost, atomically.
+        DB::beginTransaction();
+        try {
+            foreach ($validated as $v) {
                 User::create([
-                    'id' => $id,
-                    'first_name' => $first,
-                    'last_name' => $last,
-                    'role' => $role,
-                    'department_id' => $deptId,
-                    'academic_status_declared' => $statusFa ?: 'normal',
+                    'id' => $v['id'],
+                    'first_name' => $v['first'],
+                    'last_name' => $v['last'],
+                    'role' => $v['role'],
+                    'department_id' => $v['deptId'],
+                    'academic_status_declared' => $v['statusFa'] ?: 'normal',
                     'is_honor_system_acknowledged' => true,
-                    'password_hash' => Hash::make(Str::random(12)),
+                    // PERF-04 fix: temporary passwords are random, short-lived
+                    // (7d) and must-change — use the same reduced-work-factor
+                    // argon2id profile as the envelope flow (argon2id default
+                    // time_cost=4 made a 600-row import take ~1 minute of pure
+                    // hashing inside one web request).
+                    'password_hash' => Hash::make(Str::random(12), ['memory_cost' => 65536, 'time_cost' => 1, 'threads' => 1]),
                     'must_change_password' => true,
                     'temporary_password_expires_at' => now()->addDays(7),
                 ]);
                 $created++;
-            }
-
-            if (! empty($errors)) {
-                DB::rollBack();
-                return $this->generateErrorReport($errors);
             }
 
             DB::commit();
@@ -138,7 +170,7 @@ class ImportController extends Controller
         $sheet = IOFactory::load($request->file('file')->getRealPath())->getActiveSheet();
         $rows = $sheet->toArray();
         if (count($rows) - 1 > self::MAX_ROWS) {
-            return response()->json(['message' => 'حداکثر ۲۰۰۰ ردیف', 'code' => 'ROW_LIMIT'], 422);
+            return response()->json(['message' => 'حداکثر ۶۰۰ ردیف در هر فایل مجاز است', 'code' => 'ROW_LIMIT'], 422);
         }
 
         $errors = [];

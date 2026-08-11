@@ -34,6 +34,19 @@ Schedule::command('storage:calculate-stats')->dailyAt('01:00');
 // F12: mark late assignments
 Schedule::command('assignments:mark-late')->hourly();
 
+// Backups (DB audit fix): these commands existed but were scheduled nowhere.
+Schedule::command('backup:database --compress')->dailyAt('02:30');
+Schedule::command('backup:files --compress')->dailyAt('03:30');
+
+// SEC-03 fix: drop expired Sanctum tokens nightly.
+Schedule::command('sanctum:prune-expired --hours=24')->dailyAt('04:30');
+
+// PERF-09: purge expired golden-schedule cache rows (the shared cache would
+// otherwise grow unbounded during enrollment weeks).
+Schedule::call(function () {
+    \App\Models\GoldenScheduleCache::where('expires_at', '<', now())->delete();
+})->dailyAt('02:15')->name('golden-cache-purge');
+
 // Artisan inspire (dev nicety)
 Artisan::command('inspire', function () {
     $this->comment(\Illuminate\Foundation\Inspiring::quote());

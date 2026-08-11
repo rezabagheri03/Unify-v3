@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Message extends Model
 {
+    
+
     protected $table = 'messages';
 
     protected $keyType = 'string';

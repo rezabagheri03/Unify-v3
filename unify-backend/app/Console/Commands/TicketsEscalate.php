@@ -13,36 +13,63 @@ class TicketsEscalate extends Command
 
     public function handle()
     {
-        $tickets = Ticket::where('status', '!=', 'closed')
-            ->where('updated_at', '<=', now()->subHours(48))
+        // TODO-034 fix: the old filter (`is_escalated = false`) made level 2
+        // structurally unreachable. Levels are now explicit:
+        //   L1: 48h without staff reply          -> assigned staff / admin
+        //   L2: +48h more after L1, still open   -> owner + admin
+        $escalated = 0;
+
+        $level1 = Ticket::where('status', '!=', 'closed')
             ->where('is_escalated', false)
+            ->where('updated_at', '<=', now()->subHours((int) config('unify.ticket_escalation_hours', 48)))
             ->get();
 
-        foreach ($tickets as $ticket) {
+        foreach ($level1 as $ticket) {
             $ticket->update([
                 'is_escalated' => true,
                 'escalated_at' => now(),
-                'escalation_level' => $ticket->escalation_level + 1,
+                'escalation_level' => 1,
             ]);
-
-            // Notify the assigned staff, or the first admin/owner on record.
-            $notifyUserId = $ticket->assigned_to
-                ?? \App\Models\User::whereIn('role', ['admin', 'owner'])->value('id')
-                ?? \App\Models\User::value('id');
-
-            if ($notifyUserId) {
-                Notification::create([
-                    'id' => \Illuminate\Support\Str::uuid(),
-                    'user_id' => $notifyUserId,
-                    'type' => 'ticket_escalated',
-                    'title' => 'تیکت escalate شد',
-                    'body' => $ticket->subject,
-                    'priority' => 'high',
-                    'created_at' => now(),
-                ]);
-            }
+            $this->notify($ticket, ['admin'], $ticket->assigned_to);
+            $escalated++;
         }
 
-        $this->info(count($tickets) . ' tickets escalated.');
+        $level2 = Ticket::where('status', '!=', 'closed')
+            ->where('is_escalated', true)
+            ->where('escalation_level', 1)
+            ->where('escalated_at', '<=', now()->subHours((int) config('unify.ticket_escalation_hours', 48)))
+            ->get();
+
+        foreach ($level2 as $ticket) {
+            $ticket->update([
+                'escalation_level' => 2,
+                'escalated_at' => now(),
+            ]);
+            $this->notify($ticket, ['admin', 'owner']);
+            $escalated++;
+        }
+
+        $this->info($escalated . ' tickets escalated.');
+    }
+
+    private function notify(Ticket $ticket, array $roles, ?string $explicitUserId = null): void
+    {
+        $notifyUserId = $explicitUserId
+            ?? \App\Models\User::whereIn('role', $roles)->value('id')
+            ?? \App\Models\User::value('id');
+
+        if (! $notifyUserId) {
+            return;
+        }
+
+        Notification::create([
+            'id' => \Illuminate\Support\Str::uuid(),
+            'user_id' => $notifyUserId,
+            'type' => 'ticket_escalated',
+            'title' => 'تیکت escalate شد',
+            'body' => $ticket->subject,
+            'priority' => 'high',
+            'created_at' => now(),
+        ]);
     }
 }

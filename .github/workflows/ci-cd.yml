@@ -2,7 +2,7 @@ name: Unify V9 CI/CD
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, U2 ]
   pull_request:
     branches: [ main ]
 
@@ -33,6 +33,16 @@ jobs:
         run: |
           cd unify-backend
           composer install --no-interaction --prefer-dist --no-progress
+      # TODO-035 supply-chain gate (blocking): production deps must be clean.
+      - name: Composer audit (production, blocking)
+        run: |
+          cd unify-backend
+          composer audit --no-dev --no-interaction
+      # Full audit incl. dev tooling: reported but not blocking.
+      - name: Composer audit (full, informational)
+        run: |
+          cd unify-backend
+          composer audit --no-interaction || true
       - name: Configure Test Env (MySQL)
         run: |
           cd unify-backend
@@ -67,6 +77,17 @@ jobs:
           cd frontend
           npm ci --legacy-peer-deps
           npx tsc --noEmit
+      # TODO-035 supply-chain gate (blocking): shipped deps must be >= moderate-clean.
+      # Known dev-only advisories (vite/esbuild dev server, storybook's uuid) are
+      # excluded via --omit=dev — they never reach the production bundle.
+      - name: npm audit (production, blocking)
+        run: |
+          cd frontend
+          npm audit --omit=dev --audit-level=moderate
+      - name: npm audit (full, informational)
+        run: |
+          cd frontend
+          npm audit || true
       - name: Run Frontend Tests
         run: |
           cd frontend
@@ -80,33 +101,6 @@ jobs:
           cd frontend
           npx storybook build
 
-  deploy:
-    needs: [backend, frontend]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Build Frontend
-        run: |
-          cd frontend
-          npm ci --legacy-peer-deps
-          npm run build
-      - name: Deploy Frontend via FTP (cPanel)
-        uses: sebastianpopp/ftp-action@releases/v4
-        with:
-          host: ${{ secrets.FTP_HOST }}
-          user: ${{ secrets.FTP_USER }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          localDir: "frontend/dist"
-          remoteDir: "public_html"
-          options: "--delete --exclude .htaccess"
-      - name: Post-Deployment Health Check
-        run: |
-          sleep 10
-          curl -sf --max-time 10 https://api.unify-cs.ac.ir/api/health || echo "health-check-warning: backend health endpoint not reachable (check cron/backend deploy)"
+  # NOTE (SEC-07/TODO-003): the FTP deploy job that used to live here was
+  # removed. deploy.yml is now the SINGLE production pipeline — no second
+  # workflow may deploy on push to main. This file is CI (verify) only.

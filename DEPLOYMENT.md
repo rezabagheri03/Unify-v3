@@ -28,12 +28,20 @@ npm run build
 ```
 
 ## 5. Final Checklist
-- [ ] All 14 migrations ran successfully
+- [ ] All migrations ran successfully (`php artisan migrate:status` — 20 batches incl. integrity hardening)
 - [ ] Owner user created (990000001)
 - [ ] `.htaccess` in uploads folder exists
 - [ ] Polling works (30s)
-- [ ] Pushe API key configured
-- [ ] 50GB storage limit set
+- [ ] Push notifications: `PUSHE_ENABLED=false` by default — set `true` + `PUSHE_API_KEY` only if push is wanted
+- [ ] 50GB storage limit set (`system_configs.storage_used_bytes` monitored at `/monitoring/storage`)
+
+## 6. CI deploy (deploy.yml — the single pipeline)
+- Trigger: push to `main` (or manual `workflow_dispatch`)
+- Auth: SSH key — GitHub secrets `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`, `SSH_HOST_KEY_FINGERPRINT`
+- Flow: build frontend → scp release bundle → stage on server → atomic swap →
+  `php artisan migrate --force` → `config/route/view:cache` → `/health` check →
+  auto-rollback to previous release on failure (keeps last 5 releases)
+- `ftp`-based deployment was removed; do not re-add FTP secrets
 
 **Domain**: unify-cs.ac.ir
 **API**: api.unify-cs.ac.ir

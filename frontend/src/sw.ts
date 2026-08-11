@@ -15,19 +15,24 @@ clientsClaim();
 setCacheNameDetails({ prefix: 'unify' });
 precacheAndRoute(self.__WB_MANIFEST);
 
-// API GETs: network-first with 5-min cache (works offline for cached reads).
+// SEC-06 fix: ONLY public, unauthenticated GET endpoints may be runtime-cached.
+// The previous rule cached every GET /api/* response (messages, notifications,
+// enrollments, grades) into a persistent CacheStorage jar that survived logout
+// and was readable by the next user of a shared device.
 registerRoute(
-  ({ url }) => url.pathname.startsWith('/api/'),
+  ({ url }) => url.pathname === '/api/v1/branding',
   new NetworkFirst({
-    cacheName: 'unify-api',
-    plugins: [new ExpirationPlugin({ maxEntries: 100, maxAgeSeconds: 300 })],
+    cacheName: 'unify-api-public',
+    plugins: [new ExpirationPlugin({ maxEntries: 10, maxAgeSeconds: 300 })],
   }),
   'GET'
 );
 
-// File downloads (resources/forms): cache-first 100MB LRU (F05 client cache).
+// File downloads: authorized, quota-checked controller endpoints. Cache-first
+// for offline reading (F19 client cache). The jar is wiped on logout (below).
+// Note: ids are UUIDs — the pre-fix /\d+/ pattern never matched anything.
 registerRoute(
-  ({ url }) => /\/api\/v1\/resources\/\d+\/download$|\/api\/v1\/forms\/\d+\/download$/.test(url.pathname),
+  ({ url }) => /\/api\/v1\/(resources|forms)\/[^/]+\/download$/.test(url.pathname),
   new CacheFirst({
     cacheName: 'unify-files',
     plugins: [
@@ -36,12 +41,14 @@ registerRoute(
   })
 );
 
-// Background sync queue: replays queued mutating requests when back online (F19).
+// SEC-06 fix: background sync replays ONLY explicit offline-safe endpoints.
+// Previously ALL mutations (including login and password changes) were queued
+// into IndexedDB — credentials persisted in plaintext in the SyncStorage area.
 const bgSync = new BackgroundSyncPlugin('unify-offline-sync', {
   maxRetentionTime: 24 * 60, // retry for 24h
 });
 registerRoute(
-  ({ url }) => url.pathname.startsWith('/api/') && ['POST', 'PATCH', 'PUT', 'DELETE'].includes((self as any).fetchEvent?.request?.method || 'POST'),
+  ({ url }) => /^\/api\/v1\/resources\/[^/]+\/(rating|sticky-note)$/.test(url.pathname),
   new NetworkFirst({ plugins: [bgSync] }),
   'POST'
 );
@@ -51,4 +58,14 @@ registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html')));
 
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+
+  // Sent by the auth store on logout: drop every runtime API cache so a
+  // session's private data never outlives it on a shared device.
+  if (event.data && event.data.type === 'CLEAR_API_CACHE') {
+    event.waitUntil(
+      Promise.all(
+        ['unify-api-public', 'unify-files', 'unify-api'].map((name) => caches.delete(name))
+      )
+    );
+  }
 });

@@ -15,8 +15,11 @@ class NotificationController extends Controller
         $user = $request->user();
         $since = $request->get('since', now()->subMinutes(5));
 
-        // FIX C5: 5s file cache per user to reduce MySQL load
-        $cacheKey = "notifications:{$user->id}:{$since}";
+        // PERF-01 fix: the old key embedded the client-supplied `since`, making
+        // hits ~impossible (30s poll >> 5s TTL) while every poll wrote a dead
+        // cache row. The key is now per-user only; a hit may include items from
+        // a slightly older `since` window, which the client de-duplicates by id.
+        $cacheKey = "notifications:unread:{$user->id}";
 
         return Cache::remember($cacheKey, 5, function () use ($user, $since) {
             return Notification::where('user_id', $user->id)
@@ -33,6 +36,8 @@ class NotificationController extends Controller
         Notification::where('id', $id)
             ->where('user_id', $request->user()->id)
             ->update(['read' => true]);
+
+        Cache::forget("notifications:unread:{$request->user()->id}");
 
         return response()->json(['success' => true]);
     }

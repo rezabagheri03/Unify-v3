@@ -31,7 +31,7 @@ class EnrollmentController extends Controller
     {
         $enrollments = Enrollment::where('student_id', $request->user()->id)
             ->where('status', 'temporary')
-            ->with(['specification.course', 'specification.professor'])
+            ->with(['specification.course', 'specification.professor:id,first_name,last_name'])
             ->get();
 
         return response()->json($enrollments);
@@ -45,11 +45,14 @@ class EnrollmentController extends Controller
         ]);
         $specId = $request->specification_id;
 
-        // Idempotency (FIX H1)
+        // Idempotency (FIX H1, hardened): keys are namespaced PER USER and the
+        // first response is replayed verbatim (body + status) on retry.
         $idempotencyKey = $request->header('Idempotency-Key');
         if ($idempotencyKey) {
-            $existing = IdempotencyKeys::where('key', $idempotencyKey)->first();
-            if ($existing) {
+            $existing = IdempotencyKeys::where('key', $idempotencyKey)
+                ->where('user_id', $user->id)
+                ->first();
+            if ($existing && $existing->response_body) {
                 return response()->json(json_decode($existing->response_body, true), $existing->response_code);
             }
         }
@@ -74,78 +77,120 @@ class EnrollmentController extends Controller
             ], 403);
         }
 
-        // Duplicate guard
-        $duplicate = Enrollment::where('student_id', $user->id)
-            ->where('specification_id', $specId)
-            ->where('status', 'temporary')
-            ->exists();
-        if ($duplicate) {
-            return response()->json(['message' => 'این درس قبلاً در لیست موقت شماست', 'code' => 'DUPLICATE'], 409);
-        }
+        // Race + duplication fix (BE audit): duplicate / credit / overlap checks
+        // and the insert run inside ONE transaction with the student's current
+        // rows locked, and all checks read a single snapshot (PERF-08: no more
+        // triple re-fetch of the same data).
+        $result = DB::transaction(function () use ($user, $spec, $semester, $specId) {
+            $rows = Enrollment::where('student_id', $user->id)
+                ->where('semester_id', $semester->id)
+                ->whereIn('status', ['temporary', 'finalized'])
+                ->with(['specification.course'])
+                ->lockForUpdate()
+                ->get();
 
-        $currentCredits = $this->currentCredits($user->id);
-        $maxCredits = $this->getMaxCredits($user->academic_status_declared);
-        if ($currentCredits + $spec->course->credits > $maxCredits) {
-            return response()->json([
-                'message' => "سقف واحد برای وضعیت شما {$maxCredits} واحد است",
-                'code' => 'CREDIT_LIMIT_EXCEEDED',
-            ], 400);
-        }
-
-        // Time overlap (same day_of_week + interval overlap, overnight-aware) — final_semester ignores
-        if ($user->academic_status_declared !== 'final_semester') {
-            $overlap = $this->findTimeOverlap($user->id, $spec);
-            if ($overlap) {
-                return response()->json([
-                    'message' => 'تداخل زمانی با ' . $overlap['name'] . ' ' . $overlap['day'],
-                    'code' => 'TIME_OVERLAP',
-                    'errors' => ['conflicting_specs' => [$overlap['spec_id']]],
-                ], 409);
+            // Duplicate guard now covers FINALIZED too — re-adding a course
+            // after finalization used to hit the unique index and 500.
+            if ($rows->contains(fn ($e) => $e->specification_id === $specId)) {
+                return ['code' => 409, 'body' => ['message' => 'این درس قبلاً در لیست شماست', 'code' => 'DUPLICATE']];
             }
 
-            $examOverlap = $this->findExamOverlap($user->id, $spec);
-            if ($examOverlap) {
-                return response()->json([
-                    'message' => 'تداخل امتحان نهایی با ' . $examOverlap['name'] . ' - هر دو ' . $examOverlap['date'],
-                    'code' => 'EXAM_OVERLAP',
-                ], 409);
+            // TODO-041 (product decision): ONE section per (course, professor)
+            // per term. Retaking the same course+prof in a LATER term is
+            // allowed (fail/improve), so the guard stays scoped to the
+            // current-semester snapshot already locked above — no extra query.
+            if ($rows->contains(fn ($e) =>
+                $e->specification?->course_id === $spec->course_id
+                && $e->specification?->professor_id === $spec->professor_id
+            )) {
+                return ['code' => 409, 'body' => [
+                    'message' => 'این درس را با این استاد در این نیم‌سال قبلاً اخذ کرده‌اید',
+                    'code' => 'COURSE_PROF_DUPLICATE',
+                ]];
             }
-        }
 
-        $enrollment = Enrollment::create([
-            'id' => Str::uuid(),
-            'student_id' => $user->id,
-            'specification_id' => $specId,
-            'semester_id' => $spec->semester_id,
-            'status' => 'temporary',
-            'academic_status_at_enrollment' => $user->academic_status_declared,
-            'enrolled_at' => now(),
-            'version' => 1,
-        ]);
+            // Credit cap counts temp AND finalized selections in this semester.
+            $currentCredits = $rows->sum(fn ($e) => $e->specification?->course?->credits ?? 0);
+            $maxCredits = $this->getMaxCredits($user->academic_status_declared);
+            if ($currentCredits + $spec->course->credits > $maxCredits) {
+                return ['code' => 400, 'body' => [
+                    'message' => "سقف واحد برای وضعیت شما {$maxCredits} واحد است",
+                    'code' => 'CREDIT_LIMIT_EXCEEDED',
+                ]];
+            }
 
-        // Prereq warnings (warn, never block — honor system)
-        $warnings = $this->prereqWarnings($user->id, $spec);
-        $warnings = array_merge($warnings, $this->coreqWarnings($user->id, $spec));
+            // Time overlap (same day_of_week + interval overlap, overnight-aware) — final_semester ignores
+            if ($user->academic_status_declared !== 'final_semester') {
+                foreach ($rows as $enr) {
+                    $old = $enr->specification;
+                    if (! $old || $old->day_of_week !== $spec->day_of_week) {
+                        continue;
+                    }
+                    if ($this->timesOverlap($old, $spec)) {
+                        return ['code' => 409, 'body' => [
+                            'message' => 'تداخل زمانی با ' . $old->course->name . ' ' . $old->day_of_week,
+                            'code' => 'TIME_OVERLAP',
+                            'errors' => ['conflicting_specs' => [$old->id]],
+                        ]];
+                    }
+                }
 
-        if ($idempotencyKey) {
+                if ($spec->exam_date_final_g) {
+                    foreach ($rows as $enr) {
+                        $oldExam = $enr->specification?->exam_date_final_g;
+                        if (! $oldExam) {
+                            continue;
+                        }
+                        $newExam = $spec->exam_date_final_g;
+                        if ($oldExam->toDateString() === $newExam->toDateString() && abs($oldExam->diffInMinutes($newExam)) < 120) {
+                            return ['code' => 409, 'body' => [
+                                'message' => 'تداخل امتحان نهایی با ' . $enr->specification->course->name . ' - هر دو ' . $newExam->format('Y/m/d'),
+                                'code' => 'EXAM_OVERLAP',
+                            ]];
+                        }
+                    }
+                }
+            }
+
+            $enrollment = Enrollment::create([
+                'id' => Str::uuid(),
+                'student_id' => $user->id,
+                'specification_id' => $specId,
+                'semester_id' => $spec->semester_id,
+                'status' => 'temporary',
+                'academic_status_at_enrollment' => $user->academic_status_declared,
+                'enrolled_at' => now(),
+                'version' => 1,
+            ]);
+
+            // Prereq warnings (warn, never block — honor system)
+            $warnings = $this->prereqWarnings($user->id, $spec);
+            $warnings = array_merge($warnings, $this->coreqWarnings($user->id, $spec, $rows));
+
+            $enrollment->load(['specification.course', 'specification.professor:id,first_name,last_name']);
+            $enrollment->shamsi_enrolled = ShamsiService::toShamsi($enrollment->enrolled_at);
+
+            return ['code' => 201, 'body' => [
+                'message' => 'به لیست موقت اضافه شد',
+                'enrollment' => $enrollment,
+                'warnings' => $warnings,
+            ]];
+        });
+
+        if ($result['code'] === 201 && $idempotencyKey) {
             IdempotencyKeys::create([
                 'id' => Str::uuid(),
                 'key' => $idempotencyKey,
                 'user_id' => $user->id,
                 'response_code' => 201,
-                'response_body' => json_encode(['message' => 'به لیست موقت اضافه شد']),
-                'expires_at' => now()->addHours(24),
+                // Full response (not just the message) so a retried client sees
+                // exactly what the first attempt produced, including warnings.
+                'response_body' => json_encode($result['body'], JSON_UNESCAPED_UNICODE),
+                'expires_at' => now()->addHours((int) config('unify.grace_period_hours', 24)),
             ]);
         }
 
-        $enrollment->load(['specification.course', 'specification.professor']);
-        $enrollment->shamsi_enrolled = ShamsiService::toShamsi($enrollment->enrolled_at);
-
-        return response()->json([
-            'message' => 'به لیست موقت اضافه شد',
-            'enrollment' => $enrollment,
-            'warnings' => $warnings,
-        ], 201);
+        return response()->json($result['body'], $result['code']);
     }
 
     public function removeTemp(Request $request, $id)
@@ -217,7 +262,7 @@ class EnrollmentController extends Controller
         $current = Semester::where('is_current', true)->value('id');
 
         $query = Enrollment::where('student_id', $user->id)
-            ->with(['specification.course', 'specification.professor', 'semester']);
+            ->with(['specification.course', 'specification.professor:id,first_name,last_name', 'semester']);
 
         if ($request->boolean('archived')) {
             $query->where('status', 'archived');
@@ -230,38 +275,6 @@ class EnrollmentController extends Controller
 
     // ---- helpers ----
 
-    private function currentCredits(string $studentId): int
-    {
-        return Enrollment::where('student_id', $studentId)
-            ->where('status', 'temporary')
-            ->with('specification.course')
-            ->get()
-            ->sum(fn ($e) => $e->specification->course->credits ?? 0);
-    }
-
-    private function findTimeOverlap(string $studentId, CourseSpecification $newSpec): ?array
-    {
-        $existing = Enrollment::where('student_id', $studentId)
-            ->where('status', 'temporary')
-            ->with('specification.course')
-            ->get();
-
-        foreach ($existing as $enr) {
-            $old = $enr->specification;
-            if ($old->day_of_week !== $newSpec->day_of_week) {
-                continue;
-            }
-            if ($this->timesOverlap($old, $newSpec)) {
-                return [
-                    'name' => $old->course->name,
-                    'day' => $old->day_of_week,
-                    'spec_id' => $old->id,
-                ];
-            }
-        }
-        return null;
-    }
-
     private function timesOverlap(CourseSpecification $a, CourseSpecification $b): bool
     {
         // Normalize overnight (is_next_day) to 24:00-based ranges.
@@ -270,58 +283,45 @@ class EnrollmentController extends Controller
         return max($a->time_start, $b->time_start) < min($aEnd, $bEnd);
     }
 
-    private function findExamOverlap(string $studentId, CourseSpecification $newSpec): ?array
-    {
-        if (! $newSpec->exam_date_final_g) {
-            return null;
-        }
-        $existing = Enrollment::where('student_id', $studentId)
-            ->where('status', 'temporary')
-            ->with('specification.course')
-            ->get();
-
-        $newExam = $newSpec->exam_date_final_g;
-        foreach ($existing as $enr) {
-            $oldExam = $enr->specification->exam_date_final_g;
-            if (! $oldExam) {
-                continue;
-            }
-            // Same Gregorian day + within 2h buffer
-            if ($oldExam->toDateString() === $newExam->toDateString() && abs($oldExam->diffInMinutes($newExam)) < 120) {
-                return [
-                    'name' => $enr->specification->course->name,
-                    'date' => $newExam->format('Y/m/d'),
-                ];
-            }
-        }
-        return null;
-    }
-
     private function prereqWarnings(string $studentId, CourseSpecification $spec): array
     {
-        $warnings = [];
+        // PERF-08 fix: one pluck + one whereIn instead of an EXISTS per prereq.
         $prereqs = DB::table('course_prerequisites')->where('course_id', $spec->course_id)->pluck('prerequisite_id');
-        foreach ($prereqs as $prereqId) {
-            $passed = StudentPassedCourse::where('student_id', $studentId)
-                ->where('course_id', $prereqId)
-                ->where('passed', true)
-                ->exists();
-            if (! $passed) {
-                $warnings[] = ['type' => 'prereq', 'course_id' => $prereqId, 'message' => "پیش‌نیاز {$prereqId} را پاس نکرده‌اید، ادامه می‌دهید؟"];
-            }
+        if ($prereqs->isEmpty()) {
+            return [];
+        }
+
+        $passedIds = StudentPassedCourse::where('student_id', $studentId)
+            ->whereIn('course_id', $prereqs)
+            ->where('passed', true)
+            ->pluck('course_id');
+
+        $warnings = [];
+        foreach ($prereqs->diff($passedIds) as $missingId) {
+            $warnings[] = ['type' => 'prereq', 'course_id' => $missingId, 'message' => "پیش‌نیاز {$missingId} را پاس نکرده‌اید، ادامه می‌دهید؟"];
         }
         return $warnings;
     }
 
-    private function coreqWarnings(string $studentId, CourseSpecification $spec): array
+    private function coreqWarnings(string $studentId, CourseSpecification $spec, $currentRows): array
     {
-        $warnings = [];
         $coreqs = DB::table('course_corequisites')->where('course_id', $spec->course_id)->pluck('corequisite_id');
-        foreach ($coreqs as $coreqId) {
-            $inTemp = Enrollment::where('student_id', $studentId)->where('specification_id', $coreqId)->where('status', 'temporary')->exists();
-            if (! $inTemp) {
-                $warnings[] = ['type' => 'coreq', 'course_id' => $coreqId, 'message' => "هم‌نیاز {$coreqId} در لیست شما نیست"];
-            }
+        if ($coreqs->isEmpty()) {
+            return [];
+        }
+
+        // BE fix: corequisites are COURSE ids — compare against the courses in
+        // the student's current selections. The old code compared them against
+        // specification ids, so the check was structurally always false.
+        $selectedCourseIds = $currentRows
+            ->map(fn ($e) => $e->specification?->course_id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        $warnings = [];
+        foreach ($coreqs->diff($selectedCourseIds) as $missingId) {
+            $warnings[] = ['type' => 'coreq', 'course_id' => $missingId, 'message' => "هم‌نیاز {$missingId} در لیست شما نیست"];
         }
         return $warnings;
     }

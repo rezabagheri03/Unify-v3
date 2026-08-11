@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Form extends Model
 {
+    
+
     protected $table = 'forms';
 
     protected $keyType = 'string';

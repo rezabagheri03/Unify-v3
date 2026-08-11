@@ -15,7 +15,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       token: null,
       isAuthenticated: false,
@@ -33,7 +33,25 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        const token = get().token;
+        // SEC-03: best-effort server-side revocation of the presenting token
+        // (fire-and-forget; local cleanup below never waits on the network).
+        if (token) {
+          void import('../api/client')
+            .then(({ default: api }) => api.post('/auth/logout').catch(() => {}))
+            .catch(() => {});
+        }
         storageDel('auth_token');
+        // Shared-device hygiene: pending offline intents belong to the
+        // OUTGOING user (they are a per-person outbox, not a device store).
+        import('../db/idb').then(({ SyncQueue }) => SyncQueue.clearAll()).catch(() => {});
+        // SEC-06: wipe runtime API caches in the service worker so a session's
+        // private data cannot outlive it on a shared device.
+        try {
+          navigator.serviceWorker?.controller?.postMessage({ type: 'CLEAR_API_CACHE' });
+        } catch {
+          /* no controller (first load / sandbox) — harmless */
+        }
         set({ user: null, token: null, isAuthenticated: false, mustChangePassword: false });
       },
 

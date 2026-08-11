@@ -6,7 +6,6 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable
 {
@@ -27,6 +26,14 @@ class User extends Authenticatable
     protected $hidden = [
         'password_hash',
     ];
+
+    /**
+     * SEC-04 whitelist (TODO-013): the ONLY columns that may be serialized when
+     * a User row is embedded in another resource's response (message senders,
+     * spec professors...). mobile/email/supplementary_details are self-only PII
+     * and must never leave the server attached to somebody else's view.
+     */
+    public const PUBLIC_COLS = 'id,first_name,last_name,role';
 
     protected $casts = [
         'must_change_password' => 'boolean',

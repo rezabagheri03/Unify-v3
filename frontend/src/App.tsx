@@ -1,69 +1,84 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { CssBaseline } from '@mui/material';
+import { Box, CircularProgress, CssBaseline } from '@mui/material';
+import { CacheProvider } from '@emotion/react';
+import createCache from '@emotion/cache';
+import { prefixer } from 'stylis';
+import rtlPlugin from 'stylis-plugin-rtl';
 import { useAuthStore } from './stores/authStore';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import { homePathFor } from './utils/navigation';
 
-// Auth
+// Auth (kept eager: they are the first paint)
 import Login from './screens/Auth/Login';
 import Onboarding from './screens/Auth/Onboarding';
 
-// Student
-import Dashboard from './screens/Student/Dashboard';
-import SchedulerA from './screens/Student/SchedulerA';
-import SchedulerB from './screens/Student/SchedulerB';
-import SchedulerCExamFlip from './screens/Student/SchedulerCExamFlip';
-import ResourceHubList from './screens/Student/ResourceHubList';
-import InboxList from './screens/Student/InboxList';
-import TicketingList from './screens/Student/TicketingList';
-import CurriculumCharts from './screens/Student/CurriculumCharts';
-import FormsCalendar from './screens/Student/FormsCalendar';
-import AssignmentTrackerList from './screens/Student/AssignmentTrackerList';
-import SettingsNotifications from './screens/Student/Settings/Notifications';
-import SettingsOfflineQueue from './screens/Student/Settings/OfflineQueue';
-import SettingsTheme from './screens/Student/Settings/Theme';
+// PERF-05 fix: every role area is a lazy chunk. Students no longer download
+// Owner/Expert/Admin tooling (the entire app previously shipped as one eager
+// ~586 kB-raw bundle to every phone).
+const Dashboard = lazy(() => import('./screens/Student/Dashboard'));
+const SchedulerA = lazy(() => import('./screens/Student/SchedulerA'));
+const SchedulerB = lazy(() => import('./screens/Student/SchedulerB'));
+const SchedulerCExamFlip = lazy(() => import('./screens/Student/SchedulerCExamFlip'));
+const ResourceHubList = lazy(() => import('./screens/Student/ResourceHubList'));
+const InboxList = lazy(() => import('./screens/Student/InboxList'));
+const TicketingList = lazy(() => import('./screens/Student/TicketingList'));
+const CurriculumCharts = lazy(() => import('./screens/Student/CurriculumCharts'));
+const FormsCalendar = lazy(() => import('./screens/Student/FormsCalendar'));
+const AssignmentTrackerList = lazy(() => import('./screens/Student/AssignmentTrackerList'));
+const SettingsNotifications = lazy(() => import('./screens/Student/Settings/Notifications'));
+const SettingsOfflineQueue = lazy(() => import('./screens/Student/Settings/OfflineQueue'));
+const SettingsTheme = lazy(() => import('./screens/Student/Settings/Theme'));
 
 // Professor
-import ProfessorDashboard from './screens/Professor/Dashboard';
-import ProfessorResources from './screens/Professor/ResourcesList';
-import ProfessorUpload from './screens/Professor/UploadCenter';
-import ProfessorStudents from './screens/Professor/StudentsList';
-import ProfessorMessages from './screens/Professor/Messages';
-import ProfessorNotices from './screens/Professor/NoticeBoardCRUD';
+const ProfessorDashboard = lazy(() => import('./screens/Professor/Dashboard'));
+const ProfessorResources = lazy(() => import('./screens/Professor/ResourcesList'));
+const ProfessorUpload = lazy(() => import('./screens/Professor/UploadCenter'));
+const ProfessorStudents = lazy(() => import('./screens/Professor/StudentsList'));
+const ProfessorMessages = lazy(() => import('./screens/Professor/Messages'));
+const ProfessorNotices = lazy(() => import('./screens/Professor/NoticeBoardCRUD'));
 
 // Expert
-import ExpertDashboard from './screens/Expert/Dashboard';
-import ExpertCourses from './screens/Expert/CoursesCRUD';
-import ExpertSpecs from './screens/Expert/SpecificationsCRUD';
-import ExpertImport from './screens/Expert/ImportExcel';
-import ExpertPending from './screens/Expert/PendingResources';
-import ExpertPrereqs from './screens/Expert/PrereqManager';
-import ExpertMessaging from './screens/Expert/TargetedMessaging';
-import ExpertForms from './screens/Expert/FormsManagement';
+const ExpertDashboard = lazy(() => import('./screens/Expert/Dashboard'));
+const ExpertCourses = lazy(() => import('./screens/Expert/CoursesCRUD'));
+const ExpertSpecs = lazy(() => import('./screens/Expert/SpecificationsCRUD'));
+const ExpertImport = lazy(() => import('./screens/Expert/ImportExcel'));
+const ExpertPending = lazy(() => import('./screens/Expert/PendingResources'));
+const ExpertPrereqs = lazy(() => import('./screens/Expert/PrereqManager'));
+const ExpertMessaging = lazy(() => import('./screens/Expert/TargetedMessaging'));
+const ExpertForms = lazy(() => import('./screens/Expert/FormsManagement'));
 
 // Head
-import HeadApprovals from './screens/Head/FinalChartApprovalQueue';
-import HeadOversight from './screens/Head/ProfessorOversight';
+const HeadApprovals = lazy(() => import('./screens/Head/FinalChartApprovalQueue'));
+const HeadOversight = lazy(() => import('./screens/Head/ProfessorOversight'));
 
 // Admin
-import AdminDashboard from './screens/Admin/Dashboard';
-import AdminSemesters from './screens/Admin/SemestersManagement';
-import AdminUsers from './screens/Admin/UsersManagement';
-import AdminTickets from './screens/Admin/TicketsEscalated';
-import AdminBranding from './screens/Admin/BrandingLogo';
-import AdminForms from './screens/Admin/FormsUniversity';
+const AdminDashboard = lazy(() => import('./screens/Admin/Dashboard'));
+const AdminSemesters = lazy(() => import('./screens/Admin/SemestersManagement'));
+const AdminUsers = lazy(() => import('./screens/Admin/UsersManagement'));
+const AdminTickets = lazy(() => import('./screens/Admin/TicketsEscalated'));
+const AdminBranding = lazy(() => import('./screens/Admin/BrandingLogo'));
+const AdminForms = lazy(() => import('./screens/Admin/FormsUniversity'));
 
 // Owner
-import OwnerDashboard from './screens/Owner/Dashboard';
-import OwnerBulkImport from './screens/Owner/BulkImport';
-import OwnerEnvelopes from './screens/Owner/ResetPasswordEnvelope';
-import OwnerAudit from './screens/Owner/AuditLogsViewer';
-import OwnerAnalytics from './screens/Owner/AnalyticsFull';
-import OwnerSystem from './screens/Owner/SystemReadOnlyView';
+const OwnerDashboard = lazy(() => import('./screens/Owner/Dashboard'));
+const OwnerBulkImport = lazy(() => import('./screens/Owner/BulkImport'));
+const OwnerEnvelopes = lazy(() => import('./screens/Owner/ResetPasswordEnvelope'));
+const OwnerAudit = lazy(() => import('./screens/Owner/AuditLogsViewer'));
+const OwnerAnalytics = lazy(() => import('./screens/Owner/AnalyticsFull'));
+const OwnerSystem = lazy(() => import('./screens/Owner/SystemReadOnlyView'));
+
+/** Route-level lazy loading fallback. */
+function ScreenFallback() {
+  return (
+    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+      <CircularProgress />
+    </Box>
+  );
+}
 
 const theme = createTheme({
   direction: 'rtl',
@@ -71,6 +86,17 @@ const theme = createTheme({
     primary: { main: '#1976D2' },
     mode: 'light',
   },
+  typography: {
+    fontFamily: '"Vazirmatn", Tahoma, sans-serif',
+  },
+});
+
+// TODO-026 fix: emotion cache with the RTL stylis plugin — `direction: 'rtl'`
+// in the theme alone does NOT flip generated CSS rules (margins/paddings used
+// to stay LTR). Vazirmatn is loaded in fonts.css.
+const emotionCache = createCache({
+  key: 'mui-rtl',
+  stylisPlugins: [prefixer, rtlPlugin],
 });
 
 /** Blocks access unless the authenticated user's role is allowed. */
@@ -91,9 +117,11 @@ function HomeRedirect() {
 function App() {
   return (
     <ErrorBoundary>
+      <CacheProvider value={emotionCache}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <BrowserRouter>
+          <Suspense fallback={<ScreenFallback />}>
           <Routes>
             <Route path="/login" element={<Login />} />
 
@@ -171,8 +199,10 @@ function App() {
             <Route path="/" element={<HomeRedirect />} />
             <Route path="*" element={<div>صفحه یافت نشد - Unify V9</div>} />
           </Routes>
+          </Suspense>
         </BrowserRouter>
       </ThemeProvider>
+      </CacheProvider>
     </ErrorBoundary>
   );
 }

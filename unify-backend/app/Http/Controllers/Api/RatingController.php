@@ -33,13 +33,15 @@ class RatingController extends Controller
             'is_self_rating' => $resource->professor_id === $user->id,
         ]);
 
-        // Recalculate average (exclude self ratings for average)
+        // Recalculate average (exclude self ratings for average).
+        // avg() returns NULL when only self-ratings exist — ?? 0 keeps
+        // round() off the PHP 8.x null-coercion path.
         $avg = ResourceRating::where('resource_family_id', $resource->family_id)
             ->where('is_self_rating', false)
             ->avg('rating');
 
         $resource->update([
-            'average_rating' => round($avg, 1),
+            'average_rating' => round($avg ?? 0, 1),
             'rating_count' => ResourceRating::where('resource_family_id', $resource->family_id)->count(),
         ]);
 

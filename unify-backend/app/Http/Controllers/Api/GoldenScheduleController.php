@@ -43,10 +43,11 @@ class GoldenScheduleController extends Controller
             'preferProfessors' => $request->input('preferProfessors', []),
         ];
 
-        // Cache lookup (1h TTL)
+        // Cache lookup (1h TTL). PERF-09: the lookup is SHARED across students —
+        // the id-set is a function of passed/enrolled courses and prefs, so two
+        // students with identical inputs legitimately share one generation.
         $hash = md5(json_encode(['ids' => $available->pluck('id')->sort()->values(), 'prefs' => $preferences]));
-        $cached = GoldenScheduleCache::where('student_id', $user->id)
-            ->where('semester_id', $semester->id)
+        $cached = GoldenScheduleCache::where('semester_id', $semester->id)
             ->where('preferences_hash', $hash)
             ->where('expires_at', '>', now())
             ->first();

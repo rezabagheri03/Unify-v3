@@ -11,19 +11,40 @@ use App\Models\Notification;
 use App\Services\ShamsiService;
 use App\Services\InputSanitizer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use finfo;
 
 class ResourceController extends Controller
 {
+    /**
+     * SEC-01/P0 fix: the stored extension is derived ONLY from the finfo-validated
+     * MIME type — never from the client-supplied filename. A polyglot file named
+     * `evil.php` whose bytes are a PDF is therefore stored as `.pdf`, and anything
+     * whose bytes are not PDF/DOCX is rejected before it touches the disk.
+     */
+    private const MIME_TO_EXT = [
+        'application/pdf' => 'pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+    ];
+
+    /**
+     * SEC-01/P0 + SEC-05 fix: uploads live on the `local` disk (storage/app,
+     * OUTSIDE the public web root) and are served exclusively through the
+     * authorized `download` endpoint. Legacy files stored under the public disk
+     * keep working via a read fallback until they are rotated out.
+     */
+    private const DISK = 'local';
+
     public function index(Request $request)
     {
         $query = Resource::where('status', 'approved')
             ->where('is_superseded', false)
             ->where('is_deleted_content', false)
-            ->with(['course', 'professor']);
+            // SEC-04 fix: trim eager-loaded users to public-safe columns
+            // (mobile/email never leave the server).
+            ->with(['course', 'professor:id,first_name,last_name']);
 
         if ($request->course_id) {
             $query->where('course_id', $request->course_id);
@@ -46,7 +67,21 @@ class ResourceController extends Controller
 
     public function show(Request $request, $id)
     {
-        $resource = Resource::with(['course', 'professor', 'uploader'])->findOrFail($id);
+        $resource = Resource::with(['course', 'professor:id,first_name,last_name', 'uploader:id,first_name,last_name,role'])
+            ->findOrFail($id);
+
+        // SEC-05 fix: non-approved resources are only visible to staff, the
+        // uploader, and the owning professor (everyone else gets a plain 404).
+        if ($resource->status !== 'approved') {
+            $user = $request->user();
+            $privileged = in_array($user->role, ['expert', 'admin', 'owner', 'head_of_dept'])
+                || $resource->uploader_id === $user->id
+                || $resource->professor_id === $user->id;
+            if (! $privileged) {
+                abort(404);
+            }
+        }
+
         return response()->json($resource);
     }
 
@@ -74,27 +109,26 @@ class ResourceController extends Controller
 
         $file = $request->file('file');
 
-        // Magic bytes check (F05 security)
-        $finfo = new finfo(FILEINFO_MIME_TYPE);
-        $mime = $finfo->file($file->getRealPath());
-        if (! in_array($mime, ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])) {
+        // Magic bytes check (F05 security) — content decides the extension.
+        $mime = $this->validatedMime($file);
+        if ($mime === null) {
             return response()->json(['message' => 'فقط PDF و DOCX مجاز است', 'code' => 'INVALID_TYPE'], 422);
         }
-
-        // Filename safety: uuid only, never original (H10)
-        $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
+        $filename = Str::uuid() . '.' . self::MIME_TO_EXT[$mime];
 
         // Professor uploads are auto-approved and stored directly at the permanent
         // path; student uploads are staged under temp/ until approval (F05).
+        // PERF-07 fix: putFileAs streams the upload instead of loading the whole
+        // (up to 50MB) file into PHP memory.
         $isProfessor = $user->role === 'professor';
         if ($isProfessor) {
             $path = "resources/{$request->course_id}/{$professorId}/{$filename}";
-            Storage::disk('public')->put($path, file_get_contents($file));
+            Storage::disk(self::DISK)->putFileAs(dirname($path), $file, basename($path));
             $tempPath = null;
         } else {
             $path = null;
             $tempPath = 'temp/' . $user->id . '/' . $filename;
-            Storage::disk('public')->put($tempPath, file_get_contents($file));
+            Storage::disk(self::DISK)->putFileAs(dirname($tempPath), $file, basename($tempPath));
         }
 
         $resource = Resource::create([
@@ -134,28 +168,37 @@ class ResourceController extends Controller
         $user = $request->user();
         $parent = Resource::findOrFail($id);
 
+        // SEC-02 fix: only staff, the owning professor, or the original uploader
+        // may push a new version into a family.
+        $isStaff = in_array($user->role, ['expert', 'admin', 'owner']);
+        $allowed = $isStaff
+            || $parent->professor_id === $user->id
+            || $parent->uploader_id === $user->id;
+        if (! $allowed) {
+            return response()->json(['message' => 'دسترسی ندارید', 'code' => 'FORBIDDEN'], 403);
+        }
+
         $request->validate([
             'file' => 'required|file|mimes:pdf,docx|max:51200',
             'title' => 'nullable|string|max:255',
         ]);
 
         $file = $request->file('file');
-        $finfo = new finfo(FILEINFO_MIME_TYPE);
-        $mime = $finfo->file($file->getRealPath());
-        if (! in_array($mime, ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])) {
+        $mime = $this->validatedMime($file);
+        if ($mime === null) {
             return response()->json(['message' => 'فقط PDF و DOCX مجاز است', 'code' => 'INVALID_TYPE'], 422);
         }
 
         $isProfessor = $user->role === 'professor';
-        $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
+        $filename = Str::uuid() . '.' . self::MIME_TO_EXT[$mime];
         $path = "resources/{$parent->course_id}/{$parent->professor_id}/{$filename}";
 
         if ($isProfessor) {
-            Storage::disk('public')->put($path, file_get_contents($file));
+            Storage::disk(self::DISK)->putFileAs(dirname($path), $file, basename($path));
             $tempPath = null;
         } else {
             $tempPath = 'temp/' . $user->id . '/' . $filename;
-            Storage::disk('public')->put($tempPath, file_get_contents($file));
+            Storage::disk(self::DISK)->putFileAs(dirname($tempPath), $file, basename($tempPath));
         }
 
         $maxVersion = Resource::where('family_id', $parent->family_id)->max('version') ?? 1;
@@ -179,11 +222,16 @@ class ResourceController extends Controller
             'version' => $maxVersion + 1,
         ]);
 
-        // Old version superseded; hard-delete content after 30 days (F05)
-        $parent->update([
-            'is_superseded' => true,
-            'scheduled_hard_delete_at' => now()->addDays(30),
-        ]);
+        // SEC-02 fix (supersede-before-approve): the parent is only superseded
+        // when the new version is auto-approved (professor path). A student
+        // pending version leaves the approved parent untouched until an
+        // approver accepts it (see ResourceApprovalController::approve).
+        if ($isProfessor) {
+            $parent->update([
+                'is_superseded' => true,
+                'scheduled_hard_delete_at' => now()->addDays(30),
+            ]);
+        }
 
         return response()->json($newVersion, 201);
     }
@@ -203,8 +251,16 @@ class ResourceController extends Controller
             return response()->json(['message' => 'سقف روزانه ۲۰ دانلود', 'code' => 'DOWNLOAD_LIMIT'], 429);
         }
 
+        // Resolve on the secured local disk first; fall back to legacy public-
+        // disk files so pre-migration uploads keep downloading.
         $path = $resource->file_path;
-        if (! $path || ! Storage::disk('public')->exists($path)) {
+        $disk = null;
+        if ($path && Storage::disk(self::DISK)->exists($path)) {
+            $disk = self::DISK;
+        } elseif ($path && Storage::disk('public')->exists($path)) {
+            $disk = 'public';
+        }
+        if (! $disk) {
             return response()->json(['message' => 'فایل یافت نشد', 'code' => 'NOT_FOUND'], 404);
         }
 
@@ -225,7 +281,18 @@ class ResourceController extends Controller
         $downloadStat->increment('count');
         $downloadStat->increment('total_bytes', (int) $resource->file_size_bytes);
 
-        return Storage::disk('public')->download($path);
+        $ext = pathinfo($path, PATHINFO_EXTENSION);
+        $downloadName = Str::slug($resource->title) . '.' . ($ext ?: 'pdf');
+
+        return Storage::disk($disk)->download($path, $downloadName);
+    }
+
+    /** finfo-validated MIME or null when the bytes are not PDF/DOCX. */
+    private function validatedMime($file): ?string
+    {
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $mime = $finfo->file($file->getRealPath());
+        return array_key_exists($mime, self::MIME_TO_EXT) ? $mime : null;
     }
 
     private function notifyApprovers(Resource $resource): void
@@ -247,6 +314,7 @@ class ResourceController extends Controller
                 'priority' => 'high',
                 'created_at' => now(),
             ]);
+            Cache::forget("notifications:unread:{$approverId}");
         }
     }
 }

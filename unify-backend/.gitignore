@@ -2,3 +2,5 @@
 .env
 /.env
 .phpunit.result.cache
+/.phpunit.cache/
+/storage/logs/*.log

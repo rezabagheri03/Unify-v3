@@ -127,10 +127,14 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        // Auth/request audit channel — daily rotation so the log cannot grow
+        // unbounded on the shared host (PERF-11 follow-up).
         'auth' => [
-            'driver' => 'single',
+            'driver' => 'daily',
             'path' => storage_path('logs/auth.log'),
             'level' => env('LOG_LEVEL', 'info'),
+            'days' => 14,
+            'replace_placeholders' => true,
         ],
     ],
 
