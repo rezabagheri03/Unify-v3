@@ -1,0 +1,37 @@
+# SPA fallback for the STATIC frontend (PERF/TODO-036). The previous file was a
+# copy of the Laravel public/.htaccess and rewrote everything to index.php —
+# which does not exist here and would 404 every deep link if ever shipped.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Hashed vite assets are immutable — cache them for a year
+<IfModule mod_expires.c>
+    ExpiresActive On
+    <FilesMatch "^assets/.*\.(js|css|woff2?)$">
+        ExpiresDefault "access plus 1 year"
+    </FilesMatch>
+</IfModule>
+<IfModule mod_headers.c>
+    <FilesMatch "^assets/.*\.(js|css|woff2?)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+    <FilesMatch "^(index\.html|manifest\.webmanifest|sw\.js)$">
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
+</IfModule>
+
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html application/javascript text/css application/json image/svg+xml
+    # font/woff2 is already compressed
+</IfModule>
