@@ -1,0 +1,9 @@
+/vendor/
+.env
+/.env
+.phpunit.result.cache
+/.phpunit.cache/
+/storage/logs/*.log
+/storage/framework/testing/
+/storage/app/temp/
+/storage/app/resources/
