@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unify - Visual UX Flows - V9 Shared Host</title>
+<style>
+  * { box-sizing: border-box; font-family: 'Vazirmatn', 'Inter', sans-serif; }
+  body { background: #F8FAFC; margin: 0; padding: 40px 20px; color: #0F172A; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 32px; text-align: center; margin-bottom: 8px; }
+  .subtitle { text-align: center; color: #64748B; margin-bottom: 40px; font-size: 16px; }
+  .card { background: white; border-radius: 16px; padding: 24px; margin-bottom: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06); border: 1px solid #E2E8F0; }
+  .card h2 { font-size: 22px; margin: 0 0 12px 0; color: #0F172A; display: flex; align-items: center; gap: 10px; }
+  .card h2 span.badge { background: #1976D2; color: white; font-size: 12px; padding: 4px 10px; border-radius: 20px; font-weight: 600; }
+  .card p.desc { color: #475569; line-height: 1.6; margin: 0 0 16px 0; font-size: 14px; }
+  .card img { width: 100%; border-radius: 12px; border: 1px solid #E2E8F0; background: white; display: block; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #475569; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.blue { background: #1976D2; }
+  .dot.green { background: #22C55E; }
+  .dot.orange { background: #FB923C; }
+  .dot.red { background: #EF4444; }
+  .dot.gray { background: #94A3B8; }
+  .note { background: #FEF3C7; border: 1px solid #FCD34D; border-radius: 10px; padding: 12px 16px; font-size: 13px; color: #92400E; margin-top: 16px; line-height: 1.5; }
+  .footer { text-align: center; color: #94A3B8; font-size: 12px; margin-top: 40px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Unify V9 - Visual UX Flows</h1>
+  <p class="subtitle">Pars Pack Cloud Host + Host Iran | React PWA + Laravel + MySQL | 600 CS Students | No VPS, No iOS | Polling 15s + Pushe</p>
+
+  <div class="card">
+    <h2>1. Sitemap - Overall Navigation <span class="badge">P00</span></h2>
+    <p class="desc">Login → Onboarding (forced first name + password change) → Student Dashboard with Archive dropdown (current + past semesters). 6 main modules: Scheduler (Phase A Enrollment, Phase B Weekly Timetable, Phase C Exam Flip), Resource Hub Evergreen (course+professor), Inbox Unified, Ticketing, Curriculum Charts, Settings. Bottom nav: Dashboard, Scheduler, Resources, Inbox (unread badge), More. Top: Semester badge, Global state, Polling status Intranet/Online/Offline, Bell, Profile.</p>
+    <img src="visual_sitemap.png" alt="Sitemap">
+    <div class="legend">
+      <div class="legend-item"><div class="dot blue"></div> Primary Navigation</div>
+      <div class="legend-item"><div class="dot green"></div> Student Main</div>
+      <div class="legend-item"><div class="dot orange"></div> Staff Panels</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2. Enrollment Flow Phase A - Honor System + Golden Scheduler <span class="badge">F02 + F03 + F04 / P03</span></h2>
+    <p class="desc">Student must first declare academic status via Honor System radio (Normal 12-20, Conditional max14, GPA_A max24, Final Semester max24 + ignore time/exam conflicts) + acknowledge checkbox "مسئولیت با من است". Then Search (Name/Code, filters dept/day/time), Add to Temporary List with validations: time overlap checks day_of_week + time, exam overlap same day 2h buffer, prereq warning modal (not block), credit limit per status. Golden Scheduler button: backtracking with MRV heuristic, timeout 5s, max 1000 combos, scoring freeDays*20 -gap*10 +profBonus*15, returns top 15. Final Submit with confirmation, triggers grace period 24h countdown via cron. Offline: add/remove temp queued IndexedDB, final requires online.</p>
+    <img src="enrollment_flow.png" alt="Enrollment Flow">
+    <div class="note">⚠️ Shared Host Change: No WebSocket, conflict detection via polling every 15s. If Expert changes time/location of enrolled spec, banner appears 15s later: "تداخل برنامه به دلیل تغییر {course}" red.</div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>3. Resource Hub Evergreen <span class="badge">F05 + F06 / P06</span></h2>
+      <p class="desc">Evergreen = (course_id + professor_id) not semester. Student upload PDF/DOCX max 50MB, 5/day quota via MySQL, pending approval. Professor auto-approved badge professor, Student pending. Approval queue Expert/Admin sees pending list, Approve -> moves file from temp to permanent <code>/uploads/resources/{course}/{prof}/{uuid}.pdf</code> on Cloud Host (10GB Shop limit). Download increments count, caches via Cache API 100MB LRU. Rating optional snackbar after 30s (not forced popup), average excludes self to prevent inflation. Sticky private encrypted via Crypt::encryptString. Versioning family_id preserves ratings, old scheduled hard delete 30d via cron daily.</p>
+      <img src="resource_hub_flow.png" alt="Resource Hub Flow">
+      <div class="legend">
+        <div class="legend-item"><div class="dot blue"></div> Student Lane</div>
+        <div class="legend-item"><div class="dot green"></div> Professor/Admin Lane</div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>4. Ticketing + Escalation <span class="badge">F08 / P08</span></h2>
+      <p class="desc">Student creates ticket: dept education/technical/student_affairs, subject, description, max 3 images 5MB. Status: Open (gray) -> In Progress (blue, Expert assigns to self) -> Answered (green, Expert replies) -> Closed (black, Expert/Admin closes). Student reply when Answered reverts to Open. Closed cannot reopen, must create new related ticket button prefilled [مرتبط با #ID]. Escalation: Cron hourly checks no staff reply 48h -> is_escalated=true -> Escalated to Admin Level1 -> If Admin no reply 48h -> Owner Level2. Notification via polling + Pushe PHP curl.</p>
+      <img src="ticketing_flow.png" alt="Ticketing Flow">
+      <div class="legend">
+        <div class="legend-item"><div class="dot gray"></div> Open</div>
+        <div class="legend-item"><div class="dot blue"></div> In Progress</div>
+        <div class="legend-item"><div class="dot green"></div> Answered</div>
+        <div class="legend-item"><div class="dot red"></div> Escalated</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>5. Notification Intranet Must-Have - Polling + Pushe (No VPS) <span class="badge">F15 / V9</span></h2>
+    <p class="desc">Your must-have: Must work when international internet cut. V9 Shared Host has no WebSocket server (cPanel can't run persistent). So: <b>Tier 1 Polling:</b> Frontend polls <code>GET /api/notifications/unread?since=</code> every 15s foreground, 60s background via setInterval + Workbox Background Sync. HTTP works on SHOMA, so intranet still works. <b>Tier 2 Android Pushe:</b> Server calls Pushe API via PHP curl <code>https://api.pushe.co/v2/</code> - Pushe has Iranian servers reachable via intranet, unlike FCM which needs google.com. <b>Tier 3 SMS Fallback:</b> Kavenegar API via PHP curl for critical events if user opted-in. <b>Intranet Detection:</b> Client checks internal /health reachable but external google.com not -> isIntranetMode=true yellow badge "حالت اینترانت - بروزرسانی هر ۱۵ ثانیه". iOS removed entirely per your request.</p>
+    <img src="notification_intranet_flow.png" alt="Notification Intranet Flow">
+    <div class="note">💡 For 600 students on Cloud Host Shop 7GB RAM plan: Polling 600 users * 1 request/15s = 40 req/s, easily handled by LiteSpeed + 5 vCPU. No need for separate WebSocket server.</div>
+  </div>
+
+  <div class="card">
+    <h2>6. How It All Fits on Pars Pack Cloud Host + Host Iran</h2>
+    <p class="desc"><b>Cloud Host Shop 10GB SSD / 5 vCPU / 7GB RAM / Unlimited Bandwidth = 716,550 Toman/month</b> - Recommended for 600. Contains: Laravel backend outside public_html, MySQL unlimited DB, local /uploads/resources 10GB, cron every minute `php artisan schedule:run`, SSL Let's Encrypt, LiteSpeed. Frontend React PWA static dist/ goes to public_html. Optional second Host Iran for frontend static low ping + half-price traffic. Android APK hosted at /app.apk direct download, no Google Play needed (sanctioned). All 20 features work: 0 business features lost vs VPS, only degraded: real-time 0s -> 15s polling, concurrency 2000 -> 200-300, disk 2TB -> 10GB.</p>
+    <div style="background:#F1F5F9; border-radius: 10px; padding:16px; font-family: monospace; font-size: 13px; line-height: 1.6;">
+      [Student Phone - Campus WiFi 10.10.1.x]<br>
+      &nbsp;&nbsp;| (intranet) 10.10.0.5 unify-cs.ac.ir via internal DNS<br>
+      &nbsp;&nbsp;v<br>
+      [Pars Pack Cloud Host 7GB RAM]<br>
+      &nbsp;&nbsp;- Nginx 80/443 (LiteSpeed)<br>
+      &nbsp;&nbsp;- Laravel 8000 + Cron every minute<br>
+      &nbsp;&nbsp;- MySQL 8 + File Cache + Memcached<br>
+      &nbsp;&nbsp;- Local /uploads 10GB Shop limit + LRU cron daily<br>
+      &nbsp;&nbsp;|<br>
+      &nbsp;&nbsp;| (when internet online) public IP 185.10.75.10 -> Internet<br>
+      &nbsp;&nbsp;| -> Let's Encrypt, Pushe API, Kavenegar SMS<br>
+      &nbsp;&nbsp;|<br>
+      [Student at home - Home Internet]
+    </div>
+  </div>
+
+  <div class="footer">Unify V9 - Final Project - 51 Docs (4 definitive + 7 roles + 20 features + 19 pages + 1 UX flows) + 5 Visual Flowcharts - Ready for Pars Pack Cloud Host Deployment - 600 CS Students</div>
+</div>
+</body>
+</html>
